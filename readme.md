@@ -43,6 +43,8 @@ Then use commands like:
 
 • inventory — see what you have
 
+• map - view the layout of the house
+
 • quit — exit the game
 
 ## ⚙️ Requirements

@@ -14,12 +14,12 @@ class g_func:
             'Foyer': {'north': 'Sunroom', 'east': 'Door', 'west': 'Hall', 'south': 'Kitchen'},
             'Garden': {'north': 'Backyard', 'west': 'Washroom'},
             'Kitchen': {'west': 'Hallway', 'east': 'Pantry', 'south': 'Dining', 'north': 'Foyer'},
-            'Dining': {'north': 'Kitchen', 'east': 'Fireplace', 'south': 'Basement'},
+            'Dining': {'north': 'Kitchen', 'east': 'Fireplace', 'south': 'Basement', 'west': 'Guestroom'},
             'Bedroom': {'east': 'Hallway', 'south': 'Tavern', 'north': 'Library'},
             'Fireplace': {'north': 'Pantry', 'west': 'Dining', 'east': 'Backyard', 'south': 'Washroom'},
             'Washroom': {'east': 'Garden', 'west': 'Basement', 'north': 'Fireplace'},
             'Tavern': {'east': 'Guestroom', 'north': 'Bedroom'},
-            'Guestroom': {'north': 'Hallway', 'west': 'Tavern'},
+            'Guestroom': {'north': 'Hallway', 'west': 'Tavern', 'east':'Dining'},
             'Sunroom': {'south': 'Foyer', 'west': 'Shrine'},
             'Library': {'north': 'Observatory', 'east': 'Hall', 'south': 'Bedroom'},
             'Observatory': {'south': 'Library', 'east': 'Shrine'},
@@ -191,7 +191,7 @@ class g_func:
                 +-------------+     +---------+     +---------+    +--------+
                        |                 |               |              |
                   +--------+       +-----------+    +--------+    +-----------+     +----------+
-                  | Tavern |-------| Guestroom |    | Dining |----| Fireplace |-----| Backyard |
+                  | Tavern |-------| Guestroom |----| Dining |----| Fireplace |-----| Backyard |
                   +--------+       +-----------+    +--------+    +-----------+     +----------+
                                                          |               |               |
                                                    +----------+     +----------+     +--------+

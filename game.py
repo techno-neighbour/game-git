@@ -8,7 +8,7 @@ from settings import g_func
 def game_start():
     SAVE_FILE = 'game_save.json' # file to save the game state
     inventory = {}
-    health = 100
+    health = 200
     time_up = False
     time_limit = 360
 

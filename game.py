@@ -8,7 +8,7 @@ from settings import g_func
 def game_start():
     SAVE_FILE = 'game_save.json' # file to save the game state
     time_up = False
-    time_limit = 10
+    time_limit = 360
 
     ss = g_func() # initialize the game state
 
@@ -48,6 +48,9 @@ def game_start():
             while nt == nl: # ensures that the note and locked room are not in the same room
                 nt, nl = rd.choice(rv), rd.choice(rv)
 
+            while nt in sk: # ensures that the note room does not have a key
+                nt = rd.choice(rv)
+
             for room in sp:
                 room['item'] = 'potion' # assigning potions to rooms
             for room in sk:
@@ -73,6 +76,9 @@ def game_start():
 
         while nt == nl: # ensures that the note and locked room are not in the same room
             nt, nl = rd.choice(rv), rd.choice(rv)
+
+        while nt in sk: # ensures that the note room does not have a key
+            nt = rd.choice(rv)
 
         for room in sp:
             room['item'] = 'potion' # assigning potions to rooms

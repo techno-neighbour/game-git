@@ -7,10 +7,8 @@ from settings import g_func
 # variables for the game
 def game_start():
     SAVE_FILE = 'game_save.json' # file to save the game state
-    inventory = {}
-    health = 100
     time_up = False
-    time_limit = 360
+    time_limit = 10
 
     ss = g_func() # initialize the game state
 
@@ -30,15 +28,14 @@ def game_start():
             ss, n, nk = ss.load(SAVE_FILE)
             time.sleep(1)
             print("Loading your last save",end="", flush=True)
-            time.sleep(1)
+            time.sleep(0.5)
             print(".", end='', flush=True)
-            time.sleep(1)
+            time.sleep(0.5)
             print(".", end='', flush=True)
-            time.sleep(1)
+            time.sleep(0.5)
             print(".")
-            time.sleep(1)
+            time.sleep(0.25)
             print("Game loaded successfully!")
-            time.sleep(1)
             print("")
 
         else:
@@ -96,7 +93,7 @@ def game_start():
     ss.game_intro() # game premise and instructions
 
     def countdown_timer(): # game time limit
-        global time_up
+        nonlocal time_up
         start = time.time()
         while time.time() - start < time_limit:
             time.sleep(1)
@@ -206,7 +203,7 @@ def game_start():
             time.sleep(2.5)
             print("'Why were there ghosts in the house?'", end='', flush=True)
             time.sleep(2.5)
-            print(" That's when you realize...", flush=True)
+            print(" That's when you realize...\n", flush=True)
             time.sleep(3)
             break
     else:

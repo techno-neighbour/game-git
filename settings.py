@@ -79,7 +79,7 @@ class g_func:
         time.sleep(2)
         print(", with a wild grin", flush=True, end='')
         time.sleep(2)
-        print('.', flush=True, end='')
+        print('.\n', flush=True, end='')
         time.sleep(1)
         
     def dash(self,a):

@@ -2,6 +2,7 @@ import time
 import random as rd
 import json
 import sys
+import os
 
 try:
     import msvcrt
@@ -17,6 +18,12 @@ if sys.platform == 'win32':
         kernel32.SetConsoleMode(kernel32.GetStdHandle(-11), 7)
     except Exception:
         pass
+
+try:
+    sys.stdout.reconfigure(encoding='utf-8')
+except Exception:
+    pass
+
 
 class Colors:
     RESET = "\033[0m"
@@ -153,8 +160,16 @@ class g_func:
         self.required_keys = 3
         self.max_password_attempts = 5
         self.time_up = False
-        self.player_r = 4
-        self.player_c = 4
+        self.player_r = 7
+        self.player_c = 7
+        self.log_messages = []
+
+    def add_message(self, msg):
+        if not hasattr(self, 'log_messages'):
+            self.log_messages = []
+        self.log_messages.append(msg)
+        if len(self.log_messages) > 6:
+            self.log_messages.pop(0)
 
     def status(self):
         time.sleep(1)
@@ -199,12 +214,79 @@ class g_func:
             while msvcrt.kbhit():
                 msvcrt.getwch()
 
+    def print_centered(self, text, skip_flag_ref=None, delay=0.0):
+        try:
+            columns, _ = os.get_terminal_size()
+        except Exception:
+            columns = 80
+        width = max(79, columns - 1)
+        
+        # Clean ANSI escape sequences to calculate exact padding
+        import re
+        ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+        clean = ansi_escape.sub('', text)
+            
+        padding = max(0, (width - len(clean)) // 2)
+        print(" " * padding, end="")
+        if delay > 0.0:
+            for char in text:
+                print(char, end="", flush=True)
+                if skip_flag_ref is not None and not skip_flag_ref[0]:
+                    self.sleep_or_skip_helper(delay, skip_flag_ref)
+        else:
+            print(text, end="")
+        print()
+
+    def stream_file_centered(self, filename, skip_flag_ref, delay=0.05):
+        try:
+            columns, _ = os.get_terminal_size()
+        except Exception:
+            columns = 80
+        width = max(79, columns - 1)
+
+        lines = []
+        with open(filename, "r") as file:
+            for line in file:
+                stripped = line.strip()
+                if stripped:
+                    lines.append(" ".join(stripped.split()))
+                else:
+                    lines.append("")
+                    
+        # Find maximum length among non-empty lines
+        max_len = 0
+        for line in lines:
+            if len(line) > max_len:
+                max_len = len(line)
+                
+        padding = max(0, (width - max_len) // 2)
+        pad = " " * padding
+        
+        for line in lines:
+            if line:
+                print(pad, end="")
+                for i, char in enumerate(line):
+                    print(char, end="", flush=True)
+                    if not skip_flag_ref[0]:
+                        self.sleep_or_skip_helper(delay, skip_flag_ref)
+                    if char in ('.', ',', '!') and (i == len(line) - 1 or line[i+1] == ' '):
+                        if not skip_flag_ref[0]:
+                            self.sleep_or_skip_helper(0.5, skip_flag_ref)
+                print()
+            else:
+                print()
+
     def dash_skipping(self, a, skip_flag_ref):
-        print("    ", end="")
-        for i in range(69):
+        try:
+            columns, _ = os.get_terminal_size()
+        except Exception:
+            columns = 80
+        width = max(79, columns - 1)
+        
+        for i in range(width):
             print(a, end="", flush=True)
             if not skip_flag_ref[0]:
-                self.sleep_or_skip_helper(0.05, skip_flag_ref)
+                self.sleep_or_skip_helper(0.01 if a in ('-', '=') else 0.05, skip_flag_ref)
         print("")
 
     def game_intro(self):
@@ -215,25 +297,10 @@ class g_func:
         if not skip_intro[0]:
             self.sleep_or_skip_helper(1.0, skip_intro)
             
-        print(f"\n{Colors.cyan(Colors.bold('                                TEXT-BASED ADVENTURE GAME'))}")
+        self.print_centered(Colors.cyan(Colors.bold('TEXT-BASED ADVENTURE GAME')))
         self.dash_skipping("=", skip_intro)
 
-        with open("intro.txt", "r") as file: #opens the intro file
-            for line in file:
-                words = line.split()
-                print("    ", end='')  #indentation for the text
-                for word in words:
-                    for char in word:
-                        print(char, end='', flush=True) #prints each character with a delay
-                        if not skip_intro[0]:
-                            self.sleep_or_skip_helper(0.05, skip_intro)
-                    print(' ', end='', flush=True)  #adds a space between words
-                    if not skip_intro[0]:
-                        self.sleep_or_skip_helper(0.05, skip_intro)
-                    if word.endswith('.') or word.endswith(','):
-                        if not skip_intro[0]:
-                            self.sleep_or_skip_helper(0.5, skip_intro)
-                print()
+        self.stream_file_centered("intro.txt", skip_intro)
                 
         # --- SECTION 2: OBJECTIVE ---
         self.flush_input()
@@ -245,26 +312,11 @@ class g_func:
         if not skip_objective[0]:
             self.sleep_or_skip_helper(0.5, skip_objective)
             
-        print(f"    {Colors.cyan('GAME OBJECTIVE:')}")
+        self.print_centered(Colors.cyan('GAME OBJECTIVE:'))
         if not skip_objective[0]:
             self.sleep_or_skip_helper(0.7, skip_objective)
 
-        with open("objective.txt", "r") as file: # opens the objective file
-            for line in file:
-                words = line.split()
-                print("    ", end='')  #indentation for the text
-                for word in words:
-                    for char in word:
-                        print(char, end='', flush=True) #prints each character with a delay
-                        if not skip_objective[0]:
-                            self.sleep_or_skip_helper(0.05, skip_objective)
-                    print(' ', end='', flush=True)  #adds a space between words  
-                    if not skip_objective[0]:
-                        self.sleep_or_skip_helper(0.05, skip_objective)
-                    if (word.endswith(',') or word.endswith('!')):
-                        if not skip_objective[0]:
-                            self.sleep_or_skip_helper(0.45, skip_objective)
-                print()
+        self.stream_file_centered("objective.txt", skip_objective)
 
         # --- SECTION 3: COMMANDS ---
         self.flush_input()
@@ -276,21 +328,40 @@ class g_func:
         if not skip_commands[0]:
             self.sleep_or_skip_helper(2.0, skip_commands)
 
-        print(f"    {Colors.cyan('COMMANDS:')}")
+        self.print_centered(Colors.cyan('COMMANDS:'))
         
         commands_list = [
-            f"   '{Colors.yellow('move [direction]')}' - move around (north, south, east, west)",
-            f"   '{Colors.yellow('collect [item]')}' - collect the item in the room",
-            f"   '{Colors.yellow('use potion')}' - heal yourself using a potion",
-            f"   '{Colors.yellow('read note')}' - reads the note you've collected",
-            f"   '{Colors.yellow('inventory')}' - see what you've collected",
-            f"   '{Colors.yellow('map')}' - see the blueprint of the house",
-            f"   '{Colors.yellow('save')}' - save your game",
-            f"   '{Colors.yellow('quit')}' - leave the game"
+            f"'{Colors.yellow('move [direction]')}' - move around (north, south, east, west)",
+            f"'{Colors.yellow('collect [item]')}' - collect the item in the room",
+            f"'{Colors.yellow('use potion')}' - heal yourself using a potion",
+            f"'{Colors.yellow('read note')}' - reads the note you've collected",
+            f"'{Colors.yellow('inventory')}' - see what you've collected",
+            f"'{Colors.yellow('map')}' - see the blueprint of the house",
+            f"'{Colors.yellow('save')}' - save your game",
+            f"'{Colors.yellow('quit')}' - leave the game"
         ]
         
+        try:
+            columns, _ = os.get_terminal_size()
+        except Exception:
+            columns = 80
+        width = max(79, columns - 1)
+
+        # Calculate max length of command lines (stripping ANSI codes)
+        import re
+        ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+        
+        max_len = 0
         for cmd in commands_list:
-            print(cmd)
+            clean = ansi_escape.sub('', cmd)
+            if len(clean) > max_len:
+                max_len = len(clean)
+                
+        cmd_padding = max(0, (width - max_len) // 2)
+        pad = " " * cmd_padding
+        
+        for cmd in commands_list:
+            print(pad + cmd)
             if not skip_commands[0]:
                 self.sleep_or_skip_helper(0.5, skip_commands)
                 
@@ -298,32 +369,41 @@ class g_func:
         print("")
         self.flush_input()
 
-    def check_locked_room(self, room, attempts=0):
+    def check_locked_room(self, room, render_callback=None, attempts=0):
         if 'locked' in self.rooms[room] and self.rooms[room]['locked']:
-            print(f"The {Colors.cyan(room)} is locked.")
+            self.add_message(f"The {Colors.cyan(room)} is locked.")
+            if render_callback: render_callback()
             while attempts < self.max_password_attempts:
-                password = timed_input("Enter the Pin (----): ", lambda: self.time_up)
+                prompt_str = " " * 52 + f"Enter Pin ({self.max_password_attempts - attempts} left): "
+                password = timed_input(prompt_str, lambda: self.time_up)
                 if password is None or self.time_up:
                     return True
                 if password == self.rooms[room].get('password', ''):
                     time.sleep(1)
-                    print(f"\nYou've unlocked the {Colors.cyan(room)}!")
+                    self.add_message(f"You unlocked the {Colors.cyan(room)}!")
+                    if render_callback: render_callback()
                     self.rooms[room]['locked'] = False
                     return False
                 else:
                     time.sleep(1)
                     attempts += 1
-                    print(f"\n{Colors.red('Wrong password.')} {Colors.yellow(f'{self.max_password_attempts - attempts}')} attempts left.")
-            s = rd.choice(['north', 'south', 'east', 'west'])
-            while True:
-                if s not in self.rooms[self.current_room]:
-                    s = rd.choice(['north', 'south', 'east', 'west'])
-                else:
-                    break
-            print(f"Too many wrong attempts. You're being sent {Colors.cyan(s)}.")
+                    self.add_message(f"{Colors.red('Wrong password.')}")
+                    if render_callback: render_callback()
+            valid_ejection_directions = []
+            for direction in ('north', 'south', 'east', 'west'):
+                if direction in self.rooms[self.current_room]:
+                    target_room = self.rooms[self.current_room][direction]
+                    if target_room != room:
+                        valid_ejection_directions.append(direction)
+            if valid_ejection_directions:
+                s = rd.choice(valid_ejection_directions)
+            else:
+                s = rd.choice([d for d in ('north', 'south', 'east', 'west') if d in self.rooms[self.current_room]])
+            self.add_message(f"Too many wrong attempts. Sent {Colors.cyan(s)}.")
+            if render_callback: render_callback()
             self.current_room = self.rooms[self.current_room][s]
-            self.player_r = 4
-            self.player_c = 4
+            self.player_r = 7
+            self.player_c = 7
             return True
         return False
 
@@ -336,36 +416,36 @@ class g_func:
         has_west = 'west' in room_data
         has_east = 'east' in room_data
         
-        for r in range(9):
+        for r in range(15):
             row_chars = []
-            for c in range(9):
+            for c in range(15):
                 if r == 0:
-                    if c == 4 and has_north:
+                    if c == 7 and has_north:
                         row_chars.append(' ')
                     else:
-                        row_chars.append('#')
-                elif r == 8:
-                    if c == 4 and has_south:
+                        row_chars.append('█')
+                elif r == 14:
+                    if c == 7 and has_south:
                         row_chars.append(' ')
                     else:
-                        row_chars.append('#')
+                        row_chars.append('█')
                 elif c == 0:
-                    if r == 4 and has_west:
+                    if r == 7 and has_west:
                         row_chars.append(' ')
                     else:
-                        row_chars.append('#')
-                elif c == 8:
-                    if r == 4 and has_east:
+                        row_chars.append('█')
+                elif c == 14:
+                    if r == 7 and has_east:
                         row_chars.append(' ')
                     else:
-                        row_chars.append('#')
+                        row_chars.append('█')
                 else:
                     row_chars.append('.')
             grid.append(row_chars)
             
         if 'item' in room_data:
             if 'item_pos' not in room_data:
-                room_data['item_pos'] = (rd.randint(1, 7), rd.randint(1, 7))
+                room_data['item_pos'] = (rd.randint(1, 13), rd.randint(1, 13))
             ir, ic = room_data['item_pos']
             if room_data['item'] == 'key':
                 grid[ir][ic] = 'K'
@@ -376,18 +456,18 @@ class g_func:
                 
         if room_data.get('ghost') and not room_data.get('attacked'):
             if 'ghost_pos' not in room_data:
-                room_data['ghost_pos'] = (rd.randint(1, 7), rd.randint(1, 7))
+                room_data['ghost_pos'] = (rd.randint(1, 13), rd.randint(1, 13))
             gr, gc = room_data['ghost_pos']
             grid[gr][gc] = 'G'
             
         grid[player_r][player_c] = '@'
         
         colored_grid = []
-        for r in range(9):
+        for r in range(15):
             line_parts = []
-            for c in range(9):
+            for c in range(15):
                 char = grid[r][c]
-                if char == '#':
+                if char == '█':
                     line_parts.append(Colors.cyan(char))
                 elif char == '@':
                     line_parts.append(Colors.green(char))
@@ -429,24 +509,27 @@ class g_func:
                                                    +----------+     +----------+     +--------+ """
         print(Colors.cyan(layout))
 
-    def ghost(self):
+    def ghost(self, render_callback=None):
         time.sleep(1)
-        print(Colors.red('\nOh no!'),end='')
+        self.add_message(Colors.red('Oh no! A Ghost!'))
+        if render_callback: render_callback()
         time.sleep(1)
-        print(Colors.red(' A Ghost!'))
-        time.sleep(1)
-        print(Colors.red("The ghost attacks!"))
+        self.add_message(Colors.red("The ghost attacks!"))
+        if render_callback: render_callback()
         time.sleep(1)
         s = rd.choice(list(self.ghost_damage.keys()))
         s1 = f' {s} ' if s != 'normal' else ' '
         self.health -= self.ghost_damage[s]
         if self.health <= 0:
-            print(Colors.red("The ghost has defeated you! You died..."))
+            self.add_message(Colors.red("The ghost has defeated you! You died..."))
+            if render_callback: render_callback()
             return True
         else:
-            print(Colors.red(f"You were attacked by a{s1}ghost."))
+            self.add_message(Colors.red(f"You were attacked by a{s1}ghost."))
+            if render_callback: render_callback()
             time.sleep(1)
-            print(f"Your health is now {Colors.green(str(self.health)) if self.health > 20 else Colors.red(str(self.health))}.")
+            self.add_message(f"Your health is now {Colors.green(str(self.health)) if self.health > 20 else Colors.red(str(self.health))}.")
+            if render_callback: render_callback()
             time.sleep(1)
         return False
 
@@ -463,11 +546,11 @@ class g_func:
             self.health += healing_amount
             self.inventory['potion'] -= 1
             s1 = f' {s} ' if s != 'Normal' else ' '
-            print(f"You used a{s1}potion. Your health is now {Colors.green(str(self.health))}.")
+            self.add_message(f"You used a{s1}potion. HP is now {Colors.green(str(self.health))}.")
         elif self.health == 100:
-            print("Your health is already full. You can't use a potion now.")
+            self.add_message("Your health is already full.")
         elif potions_count == 0:
-            print(Colors.yellow("No potions in your inventory!"))
+            self.add_message(Colors.yellow("No potions in your inventory!"))
 
     def save(self, note_key, note_text, SAVE_FILE):
         with open(SAVE_FILE, 'w') as f:
@@ -481,7 +564,7 @@ class g_func:
                 'player_r': self.player_r,
                 'player_c': self.player_c
             }, f)
-        print("Game saved.")
+        self.add_message("Game saved.")
 
     @classmethod
     def load(cls, SAVE_FILE):
@@ -492,6 +575,6 @@ class g_func:
         inst.inventory = data['inventory']
         inst.current_room = data['current_room']
         inst.health = data['health']
-        inst.player_r = data.get('player_r', 4)
-        inst.player_c = data.get('player_c', 4)
+        inst.player_r = data.get('player_r', 7)
+        inst.player_c = data.get('player_c', 7)
         return inst, data['note_key'], data['note_text']

@@ -36,10 +36,16 @@ def game_start():
     ss = g_func() # initialize the game state
 
     def initialize_new_game(ss):
+        # Clear items/ghosts from any previous run
+        for room_name, room in ss.rooms.items():
+            for key_to_del in ['item', 'item_pos', 'ghost', 'ghost_pos', 'locked', 'password', 'attacked']:
+                if key_to_del in room:
+                    del room[key_to_del]
+
         # randomly selects a note and gets text
         n = rd.choice(list(ss.note.keys()))
         nk = ss.note[n]
-        rv = list(ss.rooms.values())
+        rv = [r for name, r in ss.rooms.items() if name not in ('Door', 'Hall', 'Hallway')]
 
         # Select 6 unique rooms for keys, potions, and note to prevent item overwriting
         item_rooms = rd.sample(rv, 6)
@@ -57,16 +63,16 @@ def game_start():
 
         for room in sp:
             room['item'] = 'potion'
-            room['item_pos'] = (rd.randint(1, 7), rd.randint(1, 7))
+            room['item_pos'] = (rd.randint(1, 13), rd.randint(1, 13))
         for room in sk:
             room['item'] = 'key'
-            room['item_pos'] = (rd.randint(1, 7), rd.randint(1, 7))
+            room['item_pos'] = (rd.randint(1, 13), rd.randint(1, 13))
         for room in sg:
             room.update({'ghost': True, 'attacked': False})
-            room['ghost_pos'] = (rd.randint(1, 7), rd.randint(1, 7))
+            room['ghost_pos'] = (rd.randint(1, 13), rd.randint(1, 13))
 
         nt['item'] = 'note'
-        nt['item_pos'] = (rd.randint(1, 7), rd.randint(1, 7))
+        nt['item_pos'] = (rd.randint(1, 13), rd.randint(1, 13))
         nl.update({'locked': True, 'password': str(n)})
 
         # Ensure door, hall, hallway don't have ghosts, keys, or potions
@@ -77,8 +83,8 @@ def game_start():
         })
         
         # Reset player position
-        ss.player_r = 4
-        ss.player_c = 4
+        ss.player_r = 7
+        ss.player_c = 7
         
         return n, nk
 
@@ -121,6 +127,7 @@ def game_start():
     else:
         n, nk = initialize_new_game(ss)
     ss.game_intro() # game premise and instructions
+    ss.log_messages = ["Walk around the room to collect items and find doorways."]
 
     def countdown_timer(): # game time limit
         nonlocal time_up
@@ -134,38 +141,184 @@ def game_start():
 
     start_time = time.time()
     action_message = ""
+    game_over_reason = "timer"
+
+    def update_ghost_movement():
+        room_data = ss.rooms[ss.current_room]
+        if room_data.get('ghost') and not room_data.get('attacked') and 'ghost_pos' in room_data:
+            gr, gc = room_data['ghost_pos']
+            # 50% chance to chase player, 50% chance to wander
+            if rd.random() < 0.5:
+                dr = ss.player_r - gr
+                dc = ss.player_c - gc
+                possible = []
+                if dr > 0: possible.append((gr + 1, gc))
+                elif dr < 0: possible.append((gr - 1, gc))
+                if dc > 0: possible.append((gr, gc + 1))
+                elif dc < 0: possible.append((gr, gc - 1))
+                valid = [(r, c) for r, c in possible if 1 <= r <= 13 and 1 <= c <= 13]
+                if valid:
+                    room_data['ghost_pos'] = rd.choice(valid)
+            else:
+                moves = [(gr+1, gc), (gr-1, gc), (gr, gc+1), (gr, gc-1), (gr, gc)]
+                valid = [(r, c) for r, c in moves if 1 <= r <= 13 and 1 <= c <= 13]
+                if valid:
+                    room_data['ghost_pos'] = rd.choice(valid)
+            
+            # Check if ghost walked onto player
+            if room_data['ghost_pos'] == (ss.player_r, ss.player_c):
+                render_game_screen("A ghost is attacking!")
+                if ss.ghost(render_game_screen):
+                    return True
+                ss.health = ss.give_health()
+                
+                # Respawn the ghost away from the player
+                p_r, p_c = ss.player_r, ss.player_c
+                while True:
+                    new_gr = rd.randint(1, 13)
+                    new_gc = rd.randint(1, 13)
+                    if abs(new_gr - p_r) + abs(new_gc - p_c) >= 3:
+                        room_data['ghost_pos'] = (new_gr, new_gc)
+                        break
+                time.sleep(1.5)
+        return False
 
     def render_game_screen(action_message=""):
         clear_screen()
-        print(ss.draw_room(ss.player_r, ss.player_c))
-        print("\n" + "=" * 55)
         
-        # Calculate remaining time
-        elapsed = time.time() - start_time
-        remaining = max(0, int(time_limit - elapsed))
-        mins, secs = divmod(remaining, 60)
-        time_str = f"{mins:02d}:{secs:02d}"
+        # Get terminal size dynamically
+        try:
+            columns, _ = os.get_terminal_size()
+        except Exception:
+            columns = 80
+        width = max(79, columns - 1)
+        
+        # Add action message to log if provided
+        if action_message:
+            ss.add_message(action_message)
+            
+        # Draw the 15x15 room grid lines (43 chars wide)
+        grid_str = ss.draw_room(ss.player_r, ss.player_c)
+        grid_lines = grid_str.split('\n')
+        
+        # Left margin spacing (slightly left-shifted)
+        left_margin = " " * 4
+        
+        # Dynamic right panel width
+        max_w = max(25, width - 50)
         
         # Health bar
         num_blocks = int(ss.health / 10)
         health_bar = "■" * num_blocks + "░" * (10 - num_blocks)
         health_color = Colors.green if ss.health > 20 else Colors.red
         
-        print(f" Location: {Colors.cyan(ss.current_room)}")
-        print(f" HP:       [{health_color(health_bar)}] {ss.health} HP")
-        print(f" Time:     {Colors.yellow(time_str)}")
+        # Timer
+        elapsed = time.time() - start_time
+        remaining = max(0, int(time_limit - elapsed))
+        mins, secs = divmod(remaining, 60)
+        time_str = f"{mins:02d}:{secs:02d}"
+        
+        # Items
         potions_str = Colors.green(str(ss.inventory.get('potion', 0)))
         keys_str = Colors.green(str(ss.inventory.get('key', 0)))
-        print(f" Items:    Keys: {keys_str}/3 | Potions: {potions_str}")
+        
+        # Note and log wrapping helper
+        import re
+        ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+        
+        def wrap_text(text, max_w):
+            words = text.split(' ')
+            lines = []
+            curr_line = []
+            curr_len = 0
+            for w in words:
+                clean_w = ansi_escape.sub('', w)
+                if curr_len + len(clean_w) + (1 if curr_line else 0) <= max_w:
+                    curr_line.append(w)
+                    curr_len += len(clean_w) + (1 if curr_line else 0)
+                else:
+                    if curr_line:
+                        lines.append(" ".join(curr_line))
+                    curr_line = [w]
+                    curr_len = len(clean_w)
+            if curr_line:
+                lines.append(" ".join(curr_line))
+            return lines
+
+        # Note wrapping
+        note_lines = []
         if ss.inventory.get('note', 0) > 0:
-            print(f" Note:     '{Colors.yellow(nk)}'")
-        print("-" * 55)
-        if action_message:
-            print(f" {action_message}")
+            note_lines = wrap_text(f"Note: '{nk}'", max_w)
+            
+        # Build sidebar lines
+        sidebar = []
+        
+        def center_in_w(text, w):
+            import re
+            ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+            clean = ansi_escape.sub('', text)
+            padding = max(0, (w - len(clean)) // 2)
+            return " " * padding + text
+            
+        # Row 0: Title
+        sidebar.append(center_in_w(Colors.bold(Colors.cyan("=== STATUS PANEL ===")), max_w))
+        
+        # Row 1: Location
+        sidebar.append(f"Location: {Colors.cyan(ss.current_room)}")
+        
+        # Row 2: HP
+        sidebar.append(f"HP:       {health_color(health_bar)} {ss.health} HP")
+        
+        # Row 3: Time
+        sidebar.append(f"Time:     {Colors.yellow(time_str)}")
+        
+        # Row 4: Keys
+        sidebar.append(f"Keys:     {keys_str}/3")
+        
+        # Row 5: Potions
+        sidebar.append(f"Potions:  {potions_str}")
+        
+        # Row 6: Note line 1
+        if len(note_lines) > 0:
+            sidebar.append(note_lines[0])
         else:
-            print(" Walk around the room to collect items and find doorways.")
-        print("=" * 55)
-        print(f" Controls: {Colors.yellow('WASD')} - Move | {Colors.yellow('U')} - Potion | {Colors.yellow('R')} - Read Note | {Colors.yellow('V')} - Save | {Colors.yellow('Q')} - Quit")
+            sidebar.append("")
+            
+        # Row 7: Note line 2
+        if len(note_lines) > 1:
+            sidebar.append(note_lines[1])
+        else:
+            sidebar.append("")
+            
+        # Row 8: Divider
+        sidebar.append(Colors.cyan("─" * max_w))
+        
+        # Rows 9 to 14: Log messages (wrapped dynamically to prevent layout breaks)
+        all_wrapped_logs = []
+        for log in ss.log_messages:
+            all_wrapped_logs.extend(wrap_text(log, max_w))
+            
+        logs = all_wrapped_logs[-6:]
+        while len(logs) < 6:
+            logs.insert(0, "")
+            
+        for log in logs:
+            sidebar.append(log)
+            
+        # Print grid and sidebar side-by-side
+        for r in range(15):
+            g_line = grid_lines[r]
+            s_line = sidebar[r]
+            print(left_margin + g_line + " │ " + s_line)
+            
+        print("=" * width)
+        
+        controls_str = f"Controls: {Colors.yellow('WASD')} - Move | {Colors.yellow('U')} - Potion | {Colors.yellow('R')} - Read Note | {Colors.yellow('V')} - Save | {Colors.yellow('Q')} - Quit"
+        import re
+        ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+        clean_controls = ansi_escape.sub('', controls_str)
+        controls_padding = max(0, (width - len(clean_controls)) // 2)
+        print(" " * controls_padding + controls_str)
 
     # main game loop
     while not time_up:
@@ -184,25 +337,26 @@ def game_start():
             print(Colors.red("You chose to die! "), end='', flush=True)
             time.sleep(1)
             print(Colors.red("May your soul be at peace."))
+            game_over_reason = "quit"
             break
             
         elif key == 'v':
-            clear_screen()
             ss.save(n, nk, SAVE_FILE)
+            render_game_screen()
             time.sleep(1.5)
             
         elif key == 'u':
-            clear_screen()
             ss.use_potion()
+            render_game_screen()
             time.sleep(1.5)
             
         elif key == 'r':
-            clear_screen()
             if ss.inventory.get('note', 0) > 0:
-                print(f"The note reads: '{Colors.yellow(nk)}'")
+                ss.add_message(f"Note reads: '{Colors.yellow(nk)}'")
             else:
-                print("You don't have a note.")
-            time.sleep(2.5)
+                ss.add_message("You don't have a note.")
+            render_game_screen()
+            time.sleep(1.5)
             
         elif key in ('w', 'a', 's', 'd'):
             # Calculate target coordinates
@@ -215,28 +369,28 @@ def game_start():
             # Check walkability / doorways
             is_doorway = False
             next_room = None
-            entry_r, entry_c = 4, 4
+            entry_r, entry_c = 7, 7
             
-            if tr == 0 and tc == 4:
+            if tr == 0 and tc == 7:
                 is_doorway = True
                 if 'north' in room_data:
                     next_room = room_data['north']
-                    entry_r, entry_c = 7, 4
-            elif tr == 8 and tc == 4:
+                    entry_r, entry_c = 13, 7
+            elif tr == 14 and tc == 7:
                 is_doorway = True
                 if 'south' in room_data:
                     next_room = room_data['south']
-                    entry_r, entry_c = 1, 4
-            elif tr == 4 and tc == 0:
+                    entry_r, entry_c = 1, 7
+            elif tr == 7 and tc == 0:
                 is_doorway = True
                 if 'west' in room_data:
                     next_room = room_data['west']
-                    entry_r, entry_c = 4, 7
-            elif tr == 4 and tc == 8:
+                    entry_r, entry_c = 7, 13
+            elif tr == 7 and tc == 14:
                 is_doorway = True
                 if 'east' in room_data:
                     next_room = room_data['east']
-                    entry_r, entry_c = 4, 1
+                    entry_r, entry_c = 7, 1
                     
             if is_doorway:
                 if next_room is not None:
@@ -245,13 +399,12 @@ def game_start():
                         if ss.inventory.get('key', 0) == ss.required_keys:
                             # Victory!
                             ss.current_room = 'Door'
+                            game_over_reason = "victory"
                             break
                         else:
                             action_message = Colors.red("The Door won't open! You need all 3 keys.")
                     elif ss.rooms[next_room].get('locked'):
-                        clear_screen()
-                        print(f"The doorway to {Colors.cyan(next_room)} is locked!")
-                        if ss.check_locked_room(next_room):
+                        if ss.check_locked_room(next_room, render_game_screen):
                             # Ejected to a random room!
                             continue
                         else:
@@ -271,7 +424,7 @@ def game_start():
                         action_message = f"You entered {Colors.cyan(ss.current_room)}."
                 else:
                     action_message = Colors.yellow("You can't go that way!")
-            elif 1 <= tr <= 7 and 1 <= tc <= 7:
+            elif 1 <= tr <= 13 and 1 <= tc <= 13:
                 # Walk inside current room
                 ss.player_r = tr
                 ss.player_c = tc
@@ -290,16 +443,29 @@ def game_start():
                     
                 # Check ghost attack
                 elif room_data.get('ghost') and not room_data.get('attacked') and room_data.get('ghost_pos') == (tr, tc):
-                    clear_screen()
-                    if ss.ghost():
+                    render_game_screen("A ghost is attacking!")
+                    if ss.ghost(render_game_screen):
+                        game_over_reason = "ghost"
                         break
                     ss.health = ss.give_health()
-                    room_data['attacked'] = True
+                    
+                    # Respawn the ghost away from the player
+                    p_r, p_c = ss.player_r, ss.player_c
+                    while True:
+                        new_gr = rd.randint(1, 13)
+                        new_gc = rd.randint(1, 13)
+                        if abs(new_gr - p_r) + abs(new_gc - p_c) >= 3:
+                            room_data['ghost_pos'] = (new_gr, new_gc)
+                            break
                     time.sleep(1.5)
             else:
                 action_message = Colors.yellow("Ouch! You hit a wall.")
 
-    if ss.current_room == 'Door' and ss.inventory.get('key', 0) == ss.required_keys:
+            if update_ghost_movement():
+                game_over_reason = "ghost"
+                break
+
+    if game_over_reason == "victory":
         print(Colors.green("\nYou have made it to the exit and start to run. "), end='', flush=True)
         time.sleep(2)
         print(Colors.green('While you run, you start to think, '), end='', flush=True)
@@ -308,5 +474,9 @@ def game_start():
         time.sleep(2.5)
         print(Colors.green(" That's when you realize...\n"), flush=True)
         time.sleep(3)
+    elif game_over_reason == "ghost":
+        pass
+    elif game_over_reason == "quit":
+        pass
     else:
         ss.death_by_patron()

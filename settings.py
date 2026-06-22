@@ -153,6 +153,8 @@ class g_func:
         self.required_keys = 3
         self.max_password_attempts = 5
         self.time_up = False
+        self.player_r = 4
+        self.player_c = 4
 
     def status(self):
         time.sleep(1)
@@ -320,8 +322,90 @@ class g_func:
                     break
             print(f"Too many wrong attempts. You're being sent {Colors.cyan(s)}.")
             self.current_room = self.rooms[self.current_room][s]
+            self.player_r = 4
+            self.player_c = 4
             return True
         return False
+
+    def draw_room(self, player_r, player_c):
+        grid = []
+        room_data = self.rooms[self.current_room]
+        
+        has_north = 'north' in room_data
+        has_south = 'south' in room_data
+        has_west = 'west' in room_data
+        has_east = 'east' in room_data
+        
+        for r in range(9):
+            row_chars = []
+            for c in range(9):
+                if r == 0:
+                    if c == 4 and has_north:
+                        row_chars.append(' ')
+                    else:
+                        row_chars.append('#')
+                elif r == 8:
+                    if c == 4 and has_south:
+                        row_chars.append(' ')
+                    else:
+                        row_chars.append('#')
+                elif c == 0:
+                    if r == 4 and has_west:
+                        row_chars.append(' ')
+                    else:
+                        row_chars.append('#')
+                elif c == 8:
+                    if r == 4 and has_east:
+                        row_chars.append(' ')
+                    else:
+                        row_chars.append('#')
+                else:
+                    row_chars.append('.')
+            grid.append(row_chars)
+            
+        if 'item' in room_data:
+            if 'item_pos' not in room_data:
+                room_data['item_pos'] = (rd.randint(1, 7), rd.randint(1, 7))
+            ir, ic = room_data['item_pos']
+            if room_data['item'] == 'key':
+                grid[ir][ic] = 'K'
+            elif room_data['item'] == 'potion':
+                grid[ir][ic] = 'P'
+            elif room_data['item'] == 'note':
+                grid[ir][ic] = 'N'
+                
+        if room_data.get('ghost') and not room_data.get('attacked'):
+            if 'ghost_pos' not in room_data:
+                room_data['ghost_pos'] = (rd.randint(1, 7), rd.randint(1, 7))
+            gr, gc = room_data['ghost_pos']
+            grid[gr][gc] = 'G'
+            
+        grid[player_r][player_c] = '@'
+        
+        colored_grid = []
+        for r in range(9):
+            line_parts = []
+            for c in range(9):
+                char = grid[r][c]
+                if char == '#':
+                    line_parts.append(Colors.cyan(char))
+                elif char == '@':
+                    line_parts.append(Colors.green(char))
+                elif char == 'K':
+                    line_parts.append(Colors.yellow(char))
+                elif char == 'P':
+                    line_parts.append(Colors.green(char))
+                elif char == 'N':
+                    line_parts.append(Colors.yellow(char))
+                elif char == 'G':
+                    line_parts.append(Colors.magenta(char))
+                elif char == '.':
+                    line_parts.append(Colors.WHITE + char + Colors.RESET)
+                else:
+                    line_parts.append(char)
+            colored_grid.append("  ".join(line_parts))
+            
+        return "\n".join(colored_grid)
     
     def blueprint(self): 
         layout = """                +-------------+     +--------+     +---------+
@@ -393,7 +477,9 @@ class g_func:
                 'current_room': self.current_room,
                 'health': self.health,
                 'note_key': note_key,
-                'note_text': note_text
+                'note_text': note_text,
+                'player_r': self.player_r,
+                'player_c': self.player_c
             }, f)
         print("Game saved.")
 
@@ -406,4 +492,6 @@ class g_func:
         inst.inventory = data['inventory']
         inst.current_room = data['current_room']
         inst.health = data['health']
+        inst.player_r = data.get('player_r', 4)
+        inst.player_c = data.get('player_c', 4)
         return inst, data['note_key'], data['note_text']

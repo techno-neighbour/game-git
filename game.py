@@ -142,6 +142,7 @@ def game_start():
     start_time = time.time()
     action_message = ""
     game_over_reason = "timer"
+    show_map = False
 
     def update_ghost_movement():
         room_data = ss.rooms[ss.current_room]
@@ -313,7 +314,7 @@ def game_start():
             
         print("=" * width)
         
-        controls_str = f"Controls: {Colors.yellow('WASD')} - Move | {Colors.yellow('U')} - Potion | {Colors.yellow('R')} - Read Note | {Colors.yellow('V')} - Save | {Colors.yellow('Q')} - Quit"
+        controls_str = f"Controls: {Colors.yellow('WASD')} - Move | {Colors.yellow('M')} - Map | {Colors.yellow('U')} - Potion | {Colors.yellow('R')} - Read Note | {Colors.yellow('V')} - Save | {Colors.yellow('Q')} - Quit"
         import re
         ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
         clean_controls = ansi_escape.sub('', controls_str)
@@ -322,6 +323,64 @@ def game_start():
 
     # main game loop
     while not time_up:
+        if show_map:
+            # Render map screen
+            clear_screen()
+            try:
+                columns, _ = os.get_terminal_size()
+            except Exception:
+                columns = 80
+            width = max(79, columns - 1)
+            
+            # Print centered header
+            print("\n" + "=" * width)
+            ss.print_centered(Colors.bold(Colors.cyan("MAP OF THE HOUSE")))
+            print("=" * width + "\n")
+            
+            # Print blueprint layout centered
+            layout = """                +-------------+     +--------+     +---------+
+                | Observatory |-----| Shrine |-----| Sunroom |
+                +-------------+     +--------+     +---------+
+                       |                 |              |
+                +-------------+     +--------+     +---------+      +------+
+                |   Library   |-----|  Hall  |-----|  Foyer  |------| Door |
+                +-------------+     +--------+     +---------+      +------+
+                        |                |              |
+                +-------------+     +---------+     +---------+    +--------+
+                |   Bedroom   |-----| Hallway |-----| Kitchen |----| Pantry |
+                +-------------+     +---------+     +---------+    +--------+
+                       |                 |               |              |
+                  +--------+       +-----------+    +--------+    +-----------+     +----------+
+                  | Tavern |-------| Guestroom |----| Dining |----| Fireplace |-----| Backyard |
+                  +--------+       +-----------+    +--------+    +-----------+     +----------+
+                                                         |               |               |
+                                                   +----------+     +----------+     +--------+
+                                                   | Basement |-----| Washroom |-----| Garden |
+                                                   +----------+     +----------+     +--------+ """
+            # Print each line centered
+            for line in layout.split('\n'):
+                # Strip leading 16 spaces for clean centering
+                stripped_line = line[16:] if len(line) >= 16 else line
+                padding = max(0, (width - 76) // 2)
+                print(" " * padding + Colors.cyan(stripped_line))
+                
+            print("\n" + "=" * width)
+            footer_str = f"Press {Colors.yellow('M')} again to close the Map."
+            import re
+            ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+            clean_footer = ansi_escape.sub('', footer_str)
+            footer_padding = max(0, (width - len(clean_footer)) // 2)
+            print(" " * footer_padding + footer_str)
+            print("=" * width)
+            
+            key = timed_key_input(lambda: time_up)
+            if key is None or time_up:
+                game_over_reason = "timer"
+                break
+            if key == 'm':
+                show_map = False
+            continue
+
         render_game_screen(action_message)
         action_message = "" # clear message for next turn
 
@@ -357,6 +416,9 @@ def game_start():
                 ss.add_message("You don't have a note.")
             render_game_screen()
             time.sleep(1.5)
+            
+        elif key == 'm':
+            show_map = True
             
         elif key in ('w', 'a', 's', 'd'):
             # Calculate target coordinates

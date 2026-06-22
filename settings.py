@@ -182,17 +182,39 @@ class g_func:
         print('.\n', flush=True, end='')
         time.sleep(1)
         
-    def dash(self,a):
-        print("    ",end="")
+    def sleep_or_skip_helper(self, duration, skip_flag_ref):
+        start = time.time()
+        while time.time() - start < duration:
+            if sys.platform == 'win32' and msvcrt is not None and msvcrt.kbhit():
+                ch = msvcrt.getwch()
+                if ch in ('\r', '\n'):
+                    skip_flag_ref[0] = True
+                    return
+            time.sleep(0.01)
+
+    def flush_input(self):
+        if sys.platform == 'win32' and msvcrt is not None:
+            while msvcrt.kbhit():
+                msvcrt.getwch()
+
+    def dash_skipping(self, a, skip_flag_ref):
+        print("    ", end="")
         for i in range(69):
-            print(a,end="",flush=True)
-            time.sleep(0.05)
+            print(a, end="", flush=True)
+            if not skip_flag_ref[0]:
+                self.sleep_or_skip_helper(0.05, skip_flag_ref)
         print("")
 
     def game_intro(self):
-        time.sleep(1)
+        self.flush_input()
+        
+        # --- SECTION 1: INTRO ---
+        skip_intro = [False]
+        if not skip_intro[0]:
+            self.sleep_or_skip_helper(1.0, skip_intro)
+            
         print(f"\n{Colors.cyan(Colors.bold('                                TEXT-BASED ADVENTURE GAME'))}")
-        self.dash("=")
+        self.dash_skipping("=", skip_intro)
 
         with open("intro.txt", "r") as file: #opens the intro file
             for line in file:
@@ -201,17 +223,29 @@ class g_func:
                 for word in words:
                     for char in word:
                         print(char, end='', flush=True) #prints each character with a delay
-                        time.sleep(0.05)  
+                        if not skip_intro[0]:
+                            self.sleep_or_skip_helper(0.05, skip_intro)
                     print(' ', end='', flush=True)  #adds a space between words
-                    time.sleep(0.05)  
+                    if not skip_intro[0]:
+                        self.sleep_or_skip_helper(0.05, skip_intro)
                     if word.endswith('.') or word.endswith(','):
-                        time.sleep(0.5)
+                        if not skip_intro[0]:
+                            self.sleep_or_skip_helper(0.5, skip_intro)
                 print()
-        time.sleep(0.5)
-        self.dash("-")
-        time.sleep(0.5)
+                
+        # --- SECTION 2: OBJECTIVE ---
+        self.flush_input()
+        skip_objective = [False]
+        
+        if not skip_objective[0]:
+            self.sleep_or_skip_helper(0.5, skip_objective)
+        self.dash_skipping("-", skip_objective)
+        if not skip_objective[0]:
+            self.sleep_or_skip_helper(0.5, skip_objective)
+            
         print(f"    {Colors.cyan('GAME OBJECTIVE:')}")
-        time.sleep(0.7)
+        if not skip_objective[0]:
+            self.sleep_or_skip_helper(0.7, skip_objective)
 
         with open("objective.txt", "r") as file: # opens the objective file
             for line in file:
@@ -220,36 +254,47 @@ class g_func:
                 for word in words:
                     for char in word:
                         print(char, end='', flush=True) #prints each character with a delay
-                        time.sleep(0.05)  
+                        if not skip_objective[0]:
+                            self.sleep_or_skip_helper(0.05, skip_objective)
                     print(' ', end='', flush=True)  #adds a space between words  
-                    time.sleep(0.05)
+                    if not skip_objective[0]:
+                        self.sleep_or_skip_helper(0.05, skip_objective)
                     if (word.endswith(',') or word.endswith('!')):
-                        time.sleep(0.45)
+                        if not skip_objective[0]:
+                            self.sleep_or_skip_helper(0.45, skip_objective)
                 print()
 
-        self.dash("-")
-        time.sleep(2)
+        # --- SECTION 3: COMMANDS ---
+        self.flush_input()
+        skip_commands = [False]
+        
+        if not skip_commands[0]:
+            self.sleep_or_skip_helper(0.5, skip_commands)
+        self.dash_skipping("-", skip_commands)
+        if not skip_commands[0]:
+            self.sleep_or_skip_helper(2.0, skip_commands)
 
         print(f"    {Colors.cyan('COMMANDS:')}")
-        time.sleep(0.5)
-        print(f"   '{Colors.yellow('move [direction]')}' - move around (north, south, east, west)")
-        time.sleep(0.5)
-        print(f"   '{Colors.yellow('collect [item]')}' - collect the item in the room")
-        time.sleep(0.5)
-        print(f"   '{Colors.yellow('use potion')}' - heal yourself using a potion")
-        time.sleep(0.5)
-        print(f"   '{Colors.yellow('read note')}' - reads the note you've collected")
-        time.sleep(0.5)
-        print(f"   '{Colors.yellow('inventory')}' - see what you've collected")
-        time.sleep(0.5)
-        print(f"   '{Colors.yellow('map')}' - see the blueprint of the house")
-        time.sleep(0.5)
-        print(f"   '{Colors.yellow('save')}' - save your game")
-        time.sleep(0.5)
-        print(f"   '{Colors.yellow('quit')}' - leave the game")
-        time.sleep(0.5)
-        self.dash("-")
+        
+        commands_list = [
+            f"   '{Colors.yellow('move [direction]')}' - move around (north, south, east, west)",
+            f"   '{Colors.yellow('collect [item]')}' - collect the item in the room",
+            f"   '{Colors.yellow('use potion')}' - heal yourself using a potion",
+            f"   '{Colors.yellow('read note')}' - reads the note you've collected",
+            f"   '{Colors.yellow('inventory')}' - see what you've collected",
+            f"   '{Colors.yellow('map')}' - see the blueprint of the house",
+            f"   '{Colors.yellow('save')}' - save your game",
+            f"   '{Colors.yellow('quit')}' - leave the game"
+        ]
+        
+        for cmd in commands_list:
+            print(cmd)
+            if not skip_commands[0]:
+                self.sleep_or_skip_helper(0.5, skip_commands)
+                
+        self.dash_skipping("-", skip_commands)
         print("")
+        self.flush_input()
 
     def check_locked_room(self, room, attempts=0):
         if 'locked' in self.rooms[room] and self.rooms[room]['locked']:

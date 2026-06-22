@@ -77,14 +77,26 @@ def timed_input(prompt, timeout_check_func):
                     sys.stdout.flush()
             elif ch == '\x03': # Ctrl+C
                 raise KeyboardInterrupt
+            elif ch in ('\x00', '\xe0'):
+                if msvcrt.kbhit():
+                    msvcrt.getwch()
+                continue
             else:
-                if ch in ('\x00', '\xe0'):
-                    if msvcrt.kbhit():
-                        msvcrt.getwch()
-                    continue
+                # Handle UTF-16 surrogate pairs (e.g. emojis) on Windows console
+                if 0xd800 <= ord(ch) <= 0xdbff:
+                    try:
+                        low_ch = msvcrt.getwch()
+                        if 0xdc00 <= ord(low_ch) <= 0xdfff:
+                            ch = chr(0x10000 + (ord(ch) - 0xd800) * 0x400 + (ord(low_ch) - 0xdc00))
+                    except Exception:
+                        pass
+                
                 input_str += ch
-                sys.stdout.write(ch)
-                sys.stdout.flush()
+                try:
+                    sys.stdout.write(ch)
+                    sys.stdout.flush()
+                except UnicodeEncodeError:
+                    pass
         time.sleep(0.05)
 
 

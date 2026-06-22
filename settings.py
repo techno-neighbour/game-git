@@ -1,6 +1,92 @@
 import time
 import random as rd
 import json
+import sys
+
+try:
+    import msvcrt
+except ImportError:
+    msvcrt = None
+
+# Enable ANSI escape codes on Windows terminal
+if sys.platform == 'win32':
+    import ctypes
+    try:
+        kernel32 = ctypes.windll.kernel32
+        # 7 is ENABLE_PROCESSED_OUTPUT (1) | ENABLE_WRAP_AT_EOL_OUTPUT (2) | ENABLE_VIRTUAL_TERMINAL_PROCESSING (4)
+        kernel32.SetConsoleMode(kernel32.GetStdHandle(-11), 7)
+    except Exception:
+        pass
+
+class Colors:
+    RESET = "\033[0m"
+    BOLD = "\033[1m"
+    RED = "\033[31m"
+    GREEN = "\033[32m"
+    YELLOW = "\033[33m"
+    BLUE = "\033[34m"
+    MAGENTA = "\033[35m"
+    CYAN = "\033[36m"
+    WHITE = "\033[37m"
+    
+    @staticmethod
+    def red(text):
+        return f"{Colors.RED}{text}{Colors.RESET}"
+
+    @staticmethod
+    def green(text):
+        return f"{Colors.GREEN}{text}{Colors.RESET}"
+
+    @staticmethod
+    def yellow(text):
+        return f"{Colors.YELLOW}{text}{Colors.RESET}"
+
+    @staticmethod
+    def cyan(text):
+        return f"{Colors.CYAN}{text}{Colors.RESET}"
+
+    @staticmethod
+    def magenta(text):
+        return f"{Colors.MAGENTA}{text}{Colors.RESET}"
+        
+    @staticmethod
+    def bold(text):
+        return f"{Colors.BOLD}{text}{Colors.RESET}"
+
+def timed_input(prompt, timeout_check_func):
+    if sys.platform != 'win32' or msvcrt is None:
+        # Fallback to standard input on non-Windows platforms
+        return input(prompt)
+        
+    sys.stdout.write(prompt)
+    sys.stdout.flush()
+    input_str = ''
+    while True:
+        if timeout_check_func():
+            return None
+        if msvcrt.kbhit():
+            ch = msvcrt.getwch()
+            if ch == '\r' or ch == '\n':
+                sys.stdout.write('\n')
+                sys.stdout.flush()
+                return input_str
+            elif ch == '\b':
+                if len(input_str) > 0:
+                    input_str = input_str[:-1]
+                    sys.stdout.write('\b \b')
+                    sys.stdout.flush()
+            elif ch == '\x03': # Ctrl+C
+                raise KeyboardInterrupt
+            else:
+                if ch in ('\x00', '\xe0'):
+                    if msvcrt.kbhit():
+                        msvcrt.getwch()
+                    continue
+                input_str += ch
+                sys.stdout.write(ch)
+                sys.stdout.flush()
+        time.sleep(0.05)
+
 
 class g_func:
     ghost_damage = {
@@ -58,26 +144,28 @@ class g_func:
 
     def status(self):
         time.sleep(1)
-        print(f"Current location: {self.current_room}")
+        print(f"Current location: {Colors.cyan(self.current_room)}")
         time.sleep(1)
-        print(f"Current health: {self.health}")
         if self.health <= 20:
-            print("WARNING: Your health is low!")
+            print(f"Current health: {Colors.red(str(self.health))}")
+            print(Colors.red("WARNING: Your health is low!"))
+        else:
+            print(f"Current health: {Colors.green(str(self.health))}")
 
     def death_by_patron(self):
-        print("\nOh no! The patron has found you.", flush=True, end='')
+        print(Colors.red("\nOh no! The patron has found you."), flush=True, end='')
         time.sleep(4)
-        print(" He fires three bullet's from his pistol,", flush=True, end='')
+        print(Colors.red(" He fires three bullet's from his pistol,"), flush=True, end='')
         time.sleep(2)
-        print(' you manage to dodge two ,', flush=True, end='')
+        print(Colors.red(' you manage to dodge two ,'), flush=True, end='')
         time.sleep(2)
-        print(" but the last one passes through your head.", flush=True, end='')
+        print(Colors.red(" but the last one passes through your head."), flush=True, end='')
         time.sleep(2)
-        print("\nYou slowly start to black out,", flush=True, end='')
+        print(Colors.red("\nYou slowly start to black out,"), flush=True, end='')
         time.sleep(2)
-        print(" as the patron stares at your lifeless body", flush=True, end='')
+        print(Colors.red(" as the patron stares at your lifeless body"), flush=True, end='')
         time.sleep(2)
-        print(", with a wild grin", flush=True, end='')
+        print(Colors.red(", with a wild grin"), flush=True, end='')
         time.sleep(2)
         print('.\n', flush=True, end='')
         time.sleep(1)
@@ -91,8 +179,7 @@ class g_func:
 
     def game_intro(self):
         time.sleep(1)
-        print("""
-                                TEXT-BASED ADVENTURE GAME""")
+        print(f"\n{Colors.cyan(Colors.bold('                                TEXT-BASED ADVENTURE GAME'))}")
         self.dash("=")
 
         with open("intro.txt", "r") as file: #opens the intro file
@@ -111,7 +198,7 @@ class g_func:
         time.sleep(0.5)
         self.dash("-")
         time.sleep(0.5)
-        print("    GAME OBJECTIVE:")
+        print(f"    {Colors.cyan('GAME OBJECTIVE:')}")
         time.sleep(0.7)
 
         with open("objective.txt", "r") as file: # opens the objective file
@@ -131,48 +218,50 @@ class g_func:
         self.dash("-")
         time.sleep(2)
 
-        print("    COMMANDS:")
+        print(f"    {Colors.cyan('COMMANDS:')}")
         time.sleep(0.5)
-        print("   'move [direction]' - move around (north, south, east, west)")
+        print(f"   '{Colors.yellow('move [direction]')}' - move around (north, south, east, west)")
         time.sleep(0.5)
-        print("   'collect [item]' - collect the item in the room")
+        print(f"   '{Colors.yellow('collect [item]')}' - collect the item in the room")
         time.sleep(0.5)
-        print("   'use potion' - heal yourself using a potion")
+        print(f"   '{Colors.yellow('use potion')}' - heal yourself using a potion")
         time.sleep(0.5)
-        print("   'read note' - reads the note you've collected")
+        print(f"   '{Colors.yellow('read note')}' - reads the note you've collected")
         time.sleep(0.5)
-        print("   'inventory' - see what you've collected")
+        print(f"   '{Colors.yellow('inventory')}' - see what you've collected")
         time.sleep(0.5)
-        print("   'map' - see the blueprint of the house")
+        print(f"   '{Colors.yellow('map')}' - see the blueprint of the house")
         time.sleep(0.5)
-        print("   'save' - save your game")
+        print(f"   '{Colors.yellow('save')}' - save your game")
         time.sleep(0.5)
-        print("   'quit' - leave the game")
+        print(f"   '{Colors.yellow('quit')}' - leave the game")
         time.sleep(0.5)
         self.dash("-")
         print("")
 
     def check_locked_room(self, room, attempts=0):
         if 'locked' in self.rooms[room] and self.rooms[room]['locked']:
-            print(f"The {room} is locked.")
+            print(f"The {Colors.cyan(room)} is locked.")
             while attempts < self.max_password_attempts:
-                password = input(f"Enter the Pin (----): ")
+                password = timed_input("Enter the Pin (----): ", lambda: self.time_up)
+                if password is None or self.time_up:
+                    return True
                 if password == self.rooms[room].get('password', ''):
                     time.sleep(1)
-                    print(f"\nYou've unlocked the {room}!")
+                    print(f"\nYou've unlocked the {Colors.cyan(room)}!")
                     self.rooms[room]['locked'] = False
                     return False
                 else:
                     time.sleep(1)
                     attempts += 1
-                    print(f"\nWrong password. {self.max_password_attempts - attempts} attempts left.")
+                    print(f"\n{Colors.red('Wrong password.')} {Colors.yellow(f'{self.max_password_attempts - attempts}')} attempts left.")
             s = rd.choice(['north', 'south', 'east', 'west'])
             while True:
                 if s not in self.rooms[self.current_room]:
                     s = rd.choice(['north', 'south', 'east', 'west'])
                 else:
                     break
-            print(f"Too many wrong attempts. You're being sent {s}.")
+            print(f"Too many wrong attempts. You're being sent {Colors.cyan(s)}.")
             self.current_room = self.rooms[self.current_room][s]
             return True
         return False
@@ -197,26 +286,26 @@ class g_func:
                                                    +----------+     +----------+     +--------+
                                                    | Basement |-----| Washroom |-----| Garden |
                                                    +----------+     +----------+     +--------+ """
-        print(layout)
+        print(Colors.cyan(layout))
 
     def ghost(self):
         time.sleep(1)
-        print('\nOh no!',end='')
+        print(Colors.red('\nOh no!'),end='')
         time.sleep(1)
-        print(' A Ghost!')
+        print(Colors.red(' A Ghost!'))
         time.sleep(1)
-        print("The ghost attacks!")
+        print(Colors.red("The ghost attacks!"))
         time.sleep(1)
         s = rd.choice(list(self.ghost_damage.keys()))
         s1 = f' {s} ' if s != 'normal' else ' '
         self.health -= self.ghost_damage[s]
         if self.health <= 0:
-            print("The ghost has defeated you! You died...")
+            print(Colors.red("The ghost has defeated you! You died..."))
             return True
         else:
-            print(f"You were attacked by a{s1}ghost.")
+            print(Colors.red(f"You were attacked by a{s1}ghost."))
             time.sleep(1)
-            print(f"Your health is now {self.health}.")
+            print(f"Your health is now {Colors.green(str(self.health)) if self.health > 20 else Colors.red(str(self.health))}.")
             time.sleep(1)
         return False
 
@@ -233,11 +322,11 @@ class g_func:
             self.health += healing_amount
             self.inventory['potion'] -= 1
             s1 = f' {s} ' if s != 'Normal' else ' '
-            print(f"You used a{s1}potion. Your health is now {self.health}.")
+            print(f"You used a{s1}potion. Your health is now {Colors.green(str(self.health))}.")
         elif self.health == 100:
             print("Your health is already full. You can't use a potion now.")
         elif potions_count == 0:
-            print("No potions in your inventory!")
+            print(Colors.yellow("No potions in your inventory!"))
 
     def save(self, note_key, note_text, SAVE_FILE):
         with open(SAVE_FILE, 'w') as f:

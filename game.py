@@ -2,7 +2,7 @@ import time
 import threading
 import random as rd
 import os
-from settings import g_func
+from settings import g_func, Colors, timed_input
 
 # variables for the game
 def game_start():
@@ -63,18 +63,26 @@ def game_start():
         time.sleep(1)
 
         if choice == 'yes': # if user wants to load the last save
-            ss, n, nk = ss.load(SAVE_FILE)
-            time.sleep(1)
-            print("Loading your last save",end="", flush=True)
-            time.sleep(0.5)
-            print(".", end='', flush=True)
-            time.sleep(0.5)
-            print(".", end='', flush=True)
-            time.sleep(0.5)
-            print(".")
-            time.sleep(0.25)
-            print("Game loaded successfully!")
-            print("")
+            try:
+                ss, n, nk = ss.load(SAVE_FILE)
+                time.sleep(1)
+                print("Loading your last save",end="", flush=True)
+                time.sleep(0.5)
+                print(".", end='', flush=True)
+                time.sleep(0.5)
+                print(".", end='', flush=True)
+                time.sleep(0.5)
+                print(".")
+                time.sleep(0.25)
+                print("Game loaded successfully!")
+                print("")
+            except Exception as e:
+                time.sleep(1)
+                print(Colors.yellow(f"\nWarning: Save file load failed (corrupted or invalid save file: {e})."))
+                time.sleep(1)
+                print("Starting a new game instead...\n")
+                time.sleep(1)
+                n, nk = initialize_new_game(ss)
 
         else:
             n, nk = initialize_new_game(ss)
@@ -88,6 +96,7 @@ def game_start():
         while time.time() - start < time_limit:
             time.sleep(1)
         time_up = True
+        ss.time_up = True
 
     threading.Thread(target=countdown_timer, daemon=True).start() # start countdown timer in a separate thread
 
@@ -96,13 +105,17 @@ def game_start():
         ss.status()
 
         if ss.check_locked_room(ss.current_room):
+            if time_up:
+                ss.death_by_patron()
+                break
             continue
 
         room_data = ss.rooms[ss.current_room]
 
         if 'item' in room_data:
             time.sleep(1)
-            print(f"You see a {room_data['item']} here.")
+            item_colored = Colors.green(room_data['item']) if room_data['item'] in ('key', 'potion') else Colors.yellow(room_data['item'])
+            print(f"You see a {item_colored} here.")
 
         if room_data.get('ghost') and not room_data['attacked']:
             if ss.ghost():
@@ -111,34 +124,37 @@ def game_start():
             room_data['attacked'] = True
 
         time.sleep(1)
-        command = input("\nWhat's your move? ").lower().split()
+        command_str = timed_input("\nWhat's your move? ", lambda: time_up)
         print()
         time.sleep(1)
+        
+        if command_str is None or time_up:
+            ss.death_by_patron()
+            break
+            
+        command = command_str.lower().split()
         if not command: # if no command is given
             print('Invalid command.')
             time.sleep(1)
             print('Please enter a valid command')
             continue
 
-        if time_up:
-            ss.death_by_patron()
-            break
-
         action = command[0]
 
         if action == 'quit':
-            print("You chose to die! ", end='', flush=True)
+            print(Colors.red("You chose to die! "), end='', flush=True)
             time.sleep(1)
-            print("May your soul be at peace.")
+            print(Colors.red("May your soul be at peace."))
             break
 
         elif action == 'save':
             ss.save(n, nk, SAVE_FILE)
 
         elif action == 'inventory':
-            potions = ss.inventory.get('potion', 0)
-            keys = ss.inventory.get('key', 0)
-            print(f"Your inventory: {ss.inventory} (Keys: {keys}) (Potions: {potions})")
+            potions = Colors.green(str(ss.inventory.get('potion', 0)))
+            keys = Colors.green(str(ss.inventory.get('key', 0)))
+            notes = Colors.yellow(str(ss.inventory.get('note', 0)))
+            print(f"Your inventory: {Colors.cyan(str(ss.inventory))} (Keys: {keys}) (Potions: {potions})")
 
         elif action == 'move' and len(command) > 1:
             direction = command[1]
@@ -147,7 +163,7 @@ def game_start():
 
                 if ss.current_room == 'Foyer' and direction == 'east' and ss.inventory.get('key', 0) < ss.required_keys:
                     time.sleep(1)
-                    print("The Door won't open! You need all 3 keys.")
+                    print(Colors.red("The Door won't open! You need all 3 keys."))
                 else:
                     # resets attack status only when actually leaving
                     if 'ghost' in room_data:
@@ -155,14 +171,14 @@ def game_start():
 
                     ss.current_room = next_room
                     time.sleep(1)
-                    print(f"You moved to the {ss.current_room}.")
+                    print(f"You moved to the {Colors.cyan(ss.current_room)}.")
             else:
                 time.sleep(1)
-                print("You can't go that way!")
+                print(Colors.yellow("You can't go that way!"))
 
         elif action == 'read' and len(command) > 1 and command[1] == 'note':
             if ss.inventory.get('note', 0) > 0:
-                print(f"The note reads: '{nk}'")
+                print(f"The note reads: '{Colors.yellow(nk)}'")
             else:
                 print("You don't have a note.")
 
@@ -170,9 +186,10 @@ def game_start():
             item = command[1]
             if room_data.get('item') == item:
                 ss.inventory[item] = ss.inventory.get(item, 0) + 1
-                print(f"You picked up a {item}.")
+                item_colored = Colors.green(item) if item in ('key', 'potion') else Colors.yellow(item)
+                print(f"You picked up a {item_colored}.")
                 if item == 'note':
-                    print(f"The note reads: '{nk}'")
+                    print(f"The note reads: '{Colors.yellow(nk)}'")
                 del room_data['item']
             else:
                 print(f"There's no {item} here.")
@@ -187,13 +204,13 @@ def game_start():
             print('Invalid command. Please enter a valid direction, item, or action.')
 
         if ss.current_room == 'Door' and ss.inventory.get('key', 0) == ss.required_keys:
-            print("\nYou have made it to the exit and start to run. ", end='', flush=True)
+            print(Colors.green("\nYou have made it to the exit and start to run. "), end='', flush=True)
             time.sleep(2)
-            print('While you run, you start to think, ', end='', flush=True)
+            print(Colors.green('While you run, you start to think, '), end='', flush=True)
             time.sleep(2.5)
-            print("'Why were there ghosts in the house?'", end='', flush=True)
+            print(Colors.green("'Why were there ghosts in the house?'"), end='', flush=True)
             time.sleep(2.5)
-            print(" That's when you realize...\n", flush=True)
+            print(Colors.green(" That's when you realize...\n"), flush=True)
             time.sleep(3)
             break
     else:

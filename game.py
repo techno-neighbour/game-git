@@ -8,9 +8,47 @@ from settings import g_func
 def game_start():
     SAVE_FILE = 'game_save.json' # file to save the game state
     time_up = False
-    time_limit = 360
+    time_limit = 300
 
     ss = g_func() # initialize the game state
+
+    def initialize_new_game(ss):
+        # randomly selects a note and gets text
+        n = rd.choice(list(ss.note.keys()))
+        nk = ss.note[n]
+        rv = list(ss.rooms.values())
+
+        # Select 6 unique rooms for keys, potions, and note to prevent item overwriting
+        item_rooms = rd.sample(rv, 6)
+        sk = item_rooms[0:3]
+        sp = item_rooms[3:5]
+        nt = item_rooms[5]
+
+        # Select 3 unique rooms for ghosts
+        sg = rd.sample(rv, 3)
+
+        # Select locked room nl (cannot be the note room nt)
+        nl = rd.choice(rv)
+        while nl == nt:
+            nl = rd.choice(rv)
+
+        for room in sp:
+            room['item'] = 'potion'
+        for room in sk:
+            room['item'] = 'key'
+        for room in sg:
+            room.update({'ghost': True, 'attacked': False})
+
+        nt['item'] = 'note'
+        nl.update({'locked': True, 'password': str(n)})
+
+        # Ensure door, hall, hallway don't have ghosts, keys, or potions
+        ss.rooms.update({
+            'Door': {'west': 'Foyer'},
+            'Hall': {'south': 'Hallway', 'east': 'Foyer', 'west': 'Library', 'north': 'Shrine'},
+            'Hallway': {'north': 'Hall', 'east': 'Kitchen', 'south': 'Guestroom', 'west': 'Bedroom'}
+        })
+        return n, nk
 
     # to check if a game file exists and user wants to load it
     if os.path.exists(SAVE_FILE):
@@ -39,63 +77,9 @@ def game_start():
             print("")
 
         else:
-            n = rd.choice(list(ss.note.keys())) # randomly selects a note
-            nk = ss.note[n] # gets the text of the note
-            rv = list(ss.rooms.values()) # gets the list of rooms
-            sk, sg, sp = rd.sample(rv, 3), rd.sample(rv, 3), rd.sample(rv, 2) # randomly selects rooms for keys, ghosts, potions
-            nt, nl = rd.choice(rv), rd.choice(rv) # randomly selects rooms for note and locked room
-
-            while nt == nl: # ensures that the note and locked room are not in the same room
-                nt, nl = rd.choice(rv), rd.choice(rv)
-
-            while nt in sk: # ensures that the note room does not have a key
-                nt = rd.choice(rv)
-
-            for room in sp:
-                room['item'] = 'potion' # assigning potions to rooms
-            for room in sk:
-                room['item'] = 'key' # assigning keys to rooms
-            for room in sg:
-                room.update({'ghost': True, 'attacked': False}) # assigning ghosts to rooms
-
-            nt['item'] = 'note'
-            nl.update({'locked': True, 'password': str(n)}) # setting the locked room with a password
-
-            # making sure that the door, hall, and hallway don't have ghosts,keys, or potions
-            ss.rooms.update({
-                'Door': {'west': 'Foyer'},
-                'Hall': {'south': 'Hallway', 'east': 'Foyer', 'west': 'Library', 'north': 'Shrine'},
-                'Hallway': {'north': 'Hall', 'east': 'Kitchen', 'south': 'Guestroom', 'west': 'Bedroom'}
-            })
+            n, nk = initialize_new_game(ss)
     else:
-        n = rd.choice(list(ss.note.keys())) # randomly selects a note
-        nk = ss.note[n] # gets the text of the note
-        rv = list(ss.rooms.values()) # gets the list of rooms
-        sk, sg, sp = rd.sample(rv, 3), rd.sample(rv, 3), rd.sample(rv, 2) # randomly selects rooms for keys, ghosts, potions
-        nt, nl = rd.choice(rv), rd.choice(rv) # randomly selects rooms for note and locked room
-
-        while nt == nl: # ensures that the note and locked room are not in the same room
-            nt, nl = rd.choice(rv), rd.choice(rv)
-
-        while nt in sk: # ensures that the note room does not have a key
-            nt = rd.choice(rv)
-
-        for room in sp:
-            room['item'] = 'potion' # assigning potions to rooms
-        for room in sk:
-            room['item'] = 'key' # assigning keys to rooms
-        for room in sg:
-            room.update({'ghost': True, 'attacked': False}) # assigning ghosts to rooms
-
-        nt['item'] = 'note'
-        nl.update({'locked': True, 'password': str(n)}) # setting the locked room with a password
-
-        # making sure that the door, hall, and hallway don't have ghosts,keys, or potions
-        ss.rooms.update({
-            'Door': {'west': 'Foyer'},
-            'Hall': {'south': 'Hallway', 'east': 'Foyer', 'west': 'Library', 'north': 'Shrine'},
-            'Hallway': {'north': 'Hall', 'east': 'Kitchen', 'south': 'Guestroom', 'west': 'Bedroom'}
-        })
+        n, nk = initialize_new_game(ss)
     ss.game_intro() # game premise and instructions
 
     def countdown_timer(): # game time limit

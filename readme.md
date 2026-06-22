@@ -17,20 +17,12 @@ You are a student staying as a paying guest in a mysterious house. Your patron t
 ## 🎮 How to Play
 To run the python script:
 
-1. Open
+1. Open your terminal in the project directory.
+
+2. Run the game:
 
 ```cmd
-settings.py
-```
-
-2. Replace the "Your_path_to_..." line with the original file paths.
-
-3. Save the file
-
-4. Open your terminal and type
-
-```cmd
-python game.py
+python game_start.py
 ```
    
 Then use commands like:

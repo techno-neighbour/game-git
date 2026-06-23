@@ -154,21 +154,23 @@ class g_func:
             '4242': 'The answer lies collinear with the answer to the universe and everything.'
         }
 
+        self.ROOM_SIZE = 21
         self.inventory = {}
         self.current_room = 'Hall'
         self.health = 100
         self.required_keys = 3
         self.max_password_attempts = 5
         self.time_up = False
-        self.player_r = 7
-        self.player_c = 7
+        self.player_r = self.ROOM_SIZE // 2
+        self.player_c = self.ROOM_SIZE // 2
+        self.player_dir = '▲'
         self.log_messages = []
 
     def add_message(self, msg):
         if not hasattr(self, 'log_messages'):
             self.log_messages = []
         self.log_messages.append(msg)
-        if len(self.log_messages) > 6:
+        if len(self.log_messages) > 50:
             self.log_messages.pop(0)
 
     def status(self):
@@ -402,8 +404,8 @@ class g_func:
             self.add_message(f"Too many wrong attempts. Sent {Colors.cyan(s)}.")
             if render_callback: render_callback()
             self.current_room = self.rooms[self.current_room][s]
-            self.player_r = 7
-            self.player_c = 7
+            self.player_r = self.ROOM_SIZE // 2
+            self.player_c = self.ROOM_SIZE // 2
             return True
         return False
 
@@ -416,26 +418,29 @@ class g_func:
         has_west = 'west' in room_data
         has_east = 'east' in room_data
         
-        for r in range(15):
+        center = self.ROOM_SIZE // 2
+        max_idx = self.ROOM_SIZE - 1
+        
+        for r in range(self.ROOM_SIZE):
             row_chars = []
-            for c in range(15):
+            for c in range(self.ROOM_SIZE):
                 if r == 0:
-                    if c == 7 and has_north:
+                    if c == center and has_north:
                         row_chars.append(' ')
                     else:
                         row_chars.append('█')
-                elif r == 14:
-                    if c == 7 and has_south:
+                elif r == max_idx:
+                    if c == center and has_south:
                         row_chars.append(' ')
                     else:
                         row_chars.append('█')
                 elif c == 0:
-                    if r == 7 and has_west:
+                    if r == center and has_west:
                         row_chars.append(' ')
                     else:
                         row_chars.append('█')
-                elif c == 14:
-                    if r == 7 and has_east:
+                elif c == max_idx:
+                    if r == center and has_east:
                         row_chars.append(' ')
                     else:
                         row_chars.append('█')
@@ -445,45 +450,49 @@ class g_func:
             
         if 'item' in room_data:
             if 'item_pos' not in room_data:
-                room_data['item_pos'] = (rd.randint(1, 13), rd.randint(1, 13))
+                room_data['item_pos'] = (rd.randint(1, self.ROOM_SIZE - 2), rd.randint(1, self.ROOM_SIZE - 2))
             ir, ic = room_data['item_pos']
             if room_data['item'] == 'key':
-                grid[ir][ic] = 'K'
+                grid[ir][ic] = '🗝'
             elif room_data['item'] == 'potion':
-                grid[ir][ic] = 'P'
+                grid[ir][ic] = '☤'
             elif room_data['item'] == 'note':
-                grid[ir][ic] = 'N'
+                grid[ir][ic] = '🗎'
                 
         if room_data.get('ghost') and not room_data.get('attacked'):
             if 'ghost_pos' not in room_data:
-                room_data['ghost_pos'] = (rd.randint(1, 13), rd.randint(1, 13))
+                room_data['ghost_pos'] = (rd.randint(1, self.ROOM_SIZE - 2), rd.randint(1, self.ROOM_SIZE - 2))
             gr, gc = room_data['ghost_pos']
-            grid[gr][gc] = 'G'
+            grid[gr][gc] = '☠'
             
-        grid[player_r][player_c] = '@'
+        grid[player_r][player_c] = self.player_dir
         
+        # Render each cell as 2 characters wide for emoji alignment
         colored_grid = []
-        for r in range(15):
+        for r in range(self.ROOM_SIZE):
             line_parts = []
-            for c in range(15):
+            for c in range(self.ROOM_SIZE):
                 char = grid[r][c]
                 if char == '█':
-                    line_parts.append(Colors.cyan(char))
-                elif char == '@':
-                    line_parts.append(Colors.green(char))
-                elif char == 'K':
-                    line_parts.append(Colors.yellow(char))
-                elif char == 'P':
-                    line_parts.append(Colors.green(char))
-                elif char == 'N':
-                    line_parts.append(Colors.yellow(char))
-                elif char == 'G':
-                    line_parts.append(Colors.magenta(char))
+                    line_parts.append(Colors.cyan("██"))
                 elif char == '.':
-                    line_parts.append(Colors.WHITE + char + Colors.RESET)
+                    line_parts.append(Colors.WHITE + ". " + Colors.RESET)
+                elif char == ' ':
+                    line_parts.append("  ")
+                elif char in ('▲', '▼', '◄', '►'):
+                    line_parts.append("🧑")
+                elif char == '☠':
+                    line_parts.append("👻")
+                elif char == '🗝':
+                    line_parts.append("🔑")
+                elif char == '☤':
+                    line_parts.append("🧪")
+                elif char == '🗎':
+                    line_parts.append("📜")
                 else:
-                    line_parts.append(char)
-            colored_grid.append("  ".join(line_parts))
+                    # Fallback for any other characters
+                    line_parts.append(char + " ")
+            colored_grid.append("".join(line_parts))
             
         return "\n".join(colored_grid)
     
@@ -562,7 +571,8 @@ class g_func:
                 'note_key': note_key,
                 'note_text': note_text,
                 'player_r': self.player_r,
-                'player_c': self.player_c
+                'player_c': self.player_c,
+                'player_dir': self.player_dir
             }, f)
         self.add_message("Game saved.")
 
@@ -575,6 +585,7 @@ class g_func:
         inst.inventory = data['inventory']
         inst.current_room = data['current_room']
         inst.health = data['health']
-        inst.player_r = data.get('player_r', 7)
-        inst.player_c = data.get('player_c', 7)
+        inst.player_r = data.get('player_r', inst.ROOM_SIZE // 2)
+        inst.player_c = data.get('player_c', inst.ROOM_SIZE // 2)
+        inst.player_dir = data.get('player_dir', '▲')
         return inst, data['note_key'], data['note_text']

@@ -63,16 +63,16 @@ def game_start():
 
         for room in sp:
             room['item'] = 'potion'
-            room['item_pos'] = (rd.randint(1, 13), rd.randint(1, 13))
+            room['item_pos'] = (rd.randint(1, ss.ROOM_SIZE - 2), rd.randint(1, ss.ROOM_SIZE - 2))
         for room in sk:
             room['item'] = 'key'
-            room['item_pos'] = (rd.randint(1, 13), rd.randint(1, 13))
+            room['item_pos'] = (rd.randint(1, ss.ROOM_SIZE - 2), rd.randint(1, ss.ROOM_SIZE - 2))
         for room in sg:
             room.update({'ghost': True, 'attacked': False})
-            room['ghost_pos'] = (rd.randint(1, 13), rd.randint(1, 13))
+            room['ghost_pos'] = (rd.randint(1, ss.ROOM_SIZE - 2), rd.randint(1, ss.ROOM_SIZE - 2))
 
         nt['item'] = 'note'
-        nt['item_pos'] = (rd.randint(1, 13), rd.randint(1, 13))
+        nt['item_pos'] = (rd.randint(1, ss.ROOM_SIZE - 2), rd.randint(1, ss.ROOM_SIZE - 2))
         nl.update({'locked': True, 'password': str(n)})
 
         # Ensure door, hall, hallway don't have ghosts, keys, or potions
@@ -83,8 +83,8 @@ def game_start():
         })
         
         # Reset player position
-        ss.player_r = 7
-        ss.player_c = 7
+        ss.player_r = ss.ROOM_SIZE // 2
+        ss.player_c = ss.ROOM_SIZE // 2
         
         return n, nk
 
@@ -157,12 +157,12 @@ def game_start():
                 elif dr < 0: possible.append((gr - 1, gc))
                 if dc > 0: possible.append((gr, gc + 1))
                 elif dc < 0: possible.append((gr, gc - 1))
-                valid = [(r, c) for r, c in possible if 1 <= r <= 13 and 1 <= c <= 13]
+                valid = [(r, c) for r, c in possible if 1 <= r <= ss.ROOM_SIZE - 2 and 1 <= c <= ss.ROOM_SIZE - 2]
                 if valid:
                     room_data['ghost_pos'] = rd.choice(valid)
             else:
                 moves = [(gr+1, gc), (gr-1, gc), (gr, gc+1), (gr, gc-1), (gr, gc)]
-                valid = [(r, c) for r, c in moves if 1 <= r <= 13 and 1 <= c <= 13]
+                valid = [(r, c) for r, c in moves if 1 <= r <= ss.ROOM_SIZE - 2 and 1 <= c <= ss.ROOM_SIZE - 2]
                 if valid:
                     room_data['ghost_pos'] = rd.choice(valid)
             
@@ -176,8 +176,8 @@ def game_start():
                 # Respawn the ghost away from the player
                 p_r, p_c = ss.player_r, ss.player_c
                 while True:
-                    new_gr = rd.randint(1, 13)
-                    new_gc = rd.randint(1, 13)
+                    new_gr = rd.randint(1, ss.ROOM_SIZE - 2)
+                    new_gc = rd.randint(1, ss.ROOM_SIZE - 2)
                     if abs(new_gr - p_r) + abs(new_gc - p_c) >= 3:
                         room_data['ghost_pos'] = (new_gr, new_gc)
                         break
@@ -279,37 +279,32 @@ def game_start():
         # Row 5: Potions
         sidebar.append(f"Potions:  {potions_str}")
         
-        # Row 6: Note line 1
+        # Row 6: Note line 1 (Note content or empty)
         if len(note_lines) > 0:
             sidebar.append(note_lines[0])
         else:
             sidebar.append("")
             
-        # Row 7: Note line 2
-        if len(note_lines) > 1:
-            sidebar.append(note_lines[1])
-        else:
-            sidebar.append("")
-            
-        # Row 8: Divider
+        # Row 7: Divider
         sidebar.append(Colors.cyan("─" * max_w))
         
-        # Rows 9 to 14: Log messages (wrapped dynamically to prevent layout breaks)
+        # Rows 8 to bottom: Log messages (wrapped dynamically to prevent layout breaks)
         all_wrapped_logs = []
         for log in ss.log_messages:
             all_wrapped_logs.extend(wrap_text(log, max_w))
             
-        logs = all_wrapped_logs[-6:]
-        while len(logs) < 6:
+        log_lines_count = len(grid_lines) - 8
+        logs = all_wrapped_logs[-log_lines_count:]
+        while len(logs) < log_lines_count:
             logs.insert(0, "")
             
         for log in logs:
             sidebar.append(log)
             
         # Print grid and sidebar side-by-side
-        for r in range(15):
+        for r in range(len(grid_lines)):
             g_line = grid_lines[r]
-            s_line = sidebar[r]
+            s_line = sidebar[r] if r < len(sidebar) else ""
             print(left_margin + g_line + " │ " + s_line)
             
         print("=" * width)
@@ -375,7 +370,7 @@ def game_start():
             
             key = timed_key_input(lambda: time_up)
             if key is None or time_up:
-                game_over_reason = "timer"
+                game_over_reason = "patron"
                 break
             if key == 'm':
                 show_map = False
@@ -386,7 +381,7 @@ def game_start():
 
         key = timed_key_input(lambda: time_up)
         if key is None or time_up:
-            ss.death_by_patron()
+            game_over_reason = "patron"
             break
             
         room_data = ss.rooms[ss.current_room]
@@ -421,6 +416,11 @@ def game_start():
             show_map = True
             
         elif key in ('w', 'a', 's', 'd'):
+            if key == 'w': ss.player_dir = '▲'
+            elif key == 's': ss.player_dir = '▼'
+            elif key == 'a': ss.player_dir = '◄'
+            elif key == 'd': ss.player_dir = '►'
+            
             # Calculate target coordinates
             tr, tc = ss.player_r, ss.player_c
             if key == 'w': tr -= 1
@@ -431,28 +431,31 @@ def game_start():
             # Check walkability / doorways
             is_doorway = False
             next_room = None
-            entry_r, entry_c = 7, 7
+            center = ss.ROOM_SIZE // 2
+            max_idx = ss.ROOM_SIZE - 1
+            inner_max = ss.ROOM_SIZE - 2
+            entry_r, entry_c = center, center
             
-            if tr == 0 and tc == 7:
+            if tr == 0 and tc == center:
                 is_doorway = True
                 if 'north' in room_data:
                     next_room = room_data['north']
-                    entry_r, entry_c = 13, 7
-            elif tr == 14 and tc == 7:
+                    entry_r, entry_c = inner_max, center
+            elif tr == max_idx and tc == center:
                 is_doorway = True
                 if 'south' in room_data:
                     next_room = room_data['south']
-                    entry_r, entry_c = 1, 7
-            elif tr == 7 and tc == 0:
+                    entry_r, entry_c = 1, center
+            elif tr == center and tc == 0:
                 is_doorway = True
                 if 'west' in room_data:
                     next_room = room_data['west']
-                    entry_r, entry_c = 7, 13
-            elif tr == 7 and tc == 14:
+                    entry_r, entry_c = center, inner_max
+            elif tr == center and tc == max_idx:
                 is_doorway = True
                 if 'east' in room_data:
                     next_room = room_data['east']
-                    entry_r, entry_c = 7, 1
+                    entry_r, entry_c = center, 1
                     
             if is_doorway:
                 if next_room is not None:
@@ -486,7 +489,7 @@ def game_start():
                         action_message = f"You entered {Colors.cyan(ss.current_room)}."
                 else:
                     action_message = Colors.yellow("You can't go that way!")
-            elif 1 <= tr <= 13 and 1 <= tc <= 13:
+            elif 1 <= tr <= ss.ROOM_SIZE - 2 and 1 <= tc <= ss.ROOM_SIZE - 2:
                 # Walk inside current room
                 ss.player_r = tr
                 ss.player_c = tc
@@ -514,8 +517,8 @@ def game_start():
                     # Respawn the ghost away from the player
                     p_r, p_c = ss.player_r, ss.player_c
                     while True:
-                        new_gr = rd.randint(1, 13)
-                        new_gc = rd.randint(1, 13)
+                        new_gr = rd.randint(1, ss.ROOM_SIZE - 2)
+                        new_gc = rd.randint(1, ss.ROOM_SIZE - 2)
                         if abs(new_gr - p_r) + abs(new_gc - p_c) >= 3:
                             room_data['ghost_pos'] = (new_gr, new_gc)
                             break
@@ -540,5 +543,7 @@ def game_start():
         pass
     elif game_over_reason == "quit":
         pass
+    elif game_over_reason == "patron":
+        ss.death_by_patron()
     else:
         ss.death_by_patron()

@@ -1,73 +1,69 @@
-# 🕹️ Text-Based Escape Game
+# 🕹️ The Exit Command
 
-A Python-based text adventure game where the player must explore rooms, collect keys and potions, avoid ghosts, and escape through a locked door — all within 5 minutes!
+A retro, text-based terminal escape Roguelike puzzle game built for the command line.
 
-You are a student staying as a paying guest in a mysterious house. Your patron traps you inside, and now you must:
+You play as a student PG trapped in a mysterious house by your patron. To survive, you must explore rooms, gather items, manage your health, and find the way out before the clock runs out!
 
-• Explore rooms
+---
 
-• Collect 3 keys to unlock the door
+## 🚀 Quick Start
 
-• Avoid ghosts that damage your health
+### Prerequisites
+* **Python**: Python 3.8 or later
+* **Terminal**: A terminal emulator supporting **ANSI escape codes** and **UTF-8 character/emoji encoding**.
+  * *Windows*: **Windows Terminal** is highly recommended for best emoji and color support.
+  * *macOS/Linux*: Default terminals (Terminal.app, iTerm2, Alacritty) work out-of-the-box.
 
-• Use potions to heal
+### Run the Game
+1. **Clone this repository**:
+   ```bash
+   git clone https://github.com/techno-neighbour/GameGit.git
+   ```
+2. **Navigate into the directory**:
+   ```bash
+   cd GameGit
+   ```
+3. **Run the launch command**:
+   ```bash
+   python game_start.py
+   ```
 
-• Escape before time runs out!
+---
 
 ## 🎮 How to Play
-To run the python script:
 
-1. Open your terminal in the project directory.
+### Legend
+* 🧑 : **Player Character** (You!)
+* 👻 : **Ghost** (Wandering hazards that deal damage)
+* 🔑 : **Key** (Collect 3 to unlock the exit door)
+* 🧪 : **Potion** (Use to restore 40 Health Points)
+* 📜 : **Note** (Lore and clues with hints to locked door passwords)
+* ██ : **Room Walls** (Cyan boundaries)
+* `. ` : **Floor** (Walkable space)
 
-2. Run the game:
+### Controls
+* `W` / `A` / `S` / `D` : **Move character** (North, West, South, East)
+* `M` : **Toggle House Map** (Shows layout and room connections)
+* `U` : **Use Potion** (Restores HP if you have one in inventory)
+* `R` : **Read Note** (Displays note text clues)
+* `V` : **Save Game** (Persists progress to `game_save.json`)
+* `Q` : **Quit** (Exit the game)
 
-```cmd
-python game_start.py
-```
-   
-Then use commands like:
+### Objective
+Explore the rooms of the haunted house, collect **3 hidden keys**, and escape through the exit door (`Door`) connected to the `Foyer` before the **5-minute timer** runs out. Avoid wandering ghosts, read notes to figure out room passwords, and keep your health above 0!
 
-• move north / move east — move in that direction
+---
 
-• collect key / collect potion — pick up items
+## 🛠️ Tech Stack & Libraries
+* **Language**: Python 3
+* **Libraries**:
+  * `msvcrt` (Standard library on Windows for non-blocking console key detection)
+  * `threading` & `time` (For managing the real-time timer and background ghost movement updates)
+  * `json` (Used for reading and writing saved game states)
 
-• use potion — restore health
+---
 
-• inventory — see what you have
-
-• map - view the layout of the house
-
-• quit — exit the game
-
-## ⚙️ Requirements
-
-• Python 3.1 and later versions
-## 📁 File Structure
-
-```
-
-├── game.py           # Game logic
-
-├── settings.py       # Room and note definitions
-
-├── intro.txt         # Premise of the game
-
-├── objective.txt     # Game Objective
-
-├── LICENSE           # MIT License
-
-└── readme.md         # This file
-```
-
-
-## 👥 Contributing
-
-Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
-
-Make sure to update tests as appropriate.
-
-
-## 📄   License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
+## 📺 Recommended Terminal Settings
+* **Font**: Monospaced (e.g., Fira Code, JetBrains Mono, MS Gothic, Cascadia Code)
+* **Window Size**: Minimum **80x25 characters** (100x30 or wider recommended to comfortably view side-by-side room grids and sidebar logs)
+* **Color**: UTF-8 and 256-color support enabled.

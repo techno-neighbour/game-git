@@ -2,6 +2,7 @@ import time
 import random as rd
 import json
 import sys
+import os
 
 try:
     import msvcrt
@@ -185,116 +186,213 @@ class g_func:
     def sleep_or_skip_helper(self, duration, skip_flag_ref):
         start = time.time()
         while time.time() - start < duration:
-            if sys.platform == 'win32' and msvcrt is not None and msvcrt.kbhit():
-                ch = msvcrt.getwch()
-                if ch in ('\r', '\n'):
-                    skip_flag_ref[0] = True
-                    return
+            if sys.platform == 'win32' and msvcrt is not None:
+                if msvcrt.kbhit():
+                    ch = msvcrt.getwch()
+                    if ch in ('\r', '\n'):
+                        skip_flag_ref[0] = True
+                        return
+            else:
+                import select
+                try:
+                    rlist, _, _ = select.select([sys.stdin], [], [], 0.0)
+                    if rlist:
+                        ch = sys.stdin.read(1)
+                        if ch in ('\r', '\n'):
+                            skip_flag_ref[0] = True
+                            return
+                except Exception:
+                    pass
             time.sleep(0.01)
 
     def flush_input(self):
         if sys.platform == 'win32' and msvcrt is not None:
             while msvcrt.kbhit():
                 msvcrt.getwch()
+        else:
+            try:
+                import select
+                while select.select([sys.stdin], [], [], 0.0)[0]:
+                    sys.stdin.read(1)
+            except Exception:
+                pass
+    def print_centered(self, text, skip_flag_ref=None, delay=0.0):
+        try:
+            columns, _ = os.get_terminal_size()
+        except Exception:
+            columns = 80
+        width = max(79, columns - 1)
+
+        # Clean ANSI escape sequences to calculate exact padding
+        import re
+        ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+        clean = ansi_escape.sub('', text)
+
+        padding = max(0, (width - len(clean)) // 2)
+        print(" " * padding, end="")
+        if delay > 0.0:
+            for char in text:
+                print(char, end="", flush=True)
+                if skip_flag_ref is not None and not skip_flag_ref[0]:
+                    self.sleep_or_skip_helper(delay, skip_flag_ref)
+        else:
+            print(text, end="")
+        print()
+
+    def stream_file_centered(self, filename, skip_flag_ref, delay=0.05):
+        try:
+            columns, _ = os.get_terminal_size()
+        except Exception:
+            columns = 80
+        width = max(79, columns - 1)
+
+        lines = []
+        with open(filename, "r") as file:
+            for line in file:
+                stripped = line.strip()
+                if stripped:
+                    lines.append(" ".join(stripped.split()))
+                else:
+                    lines.append("")
+
+        # Find maximum length among non-empty lines
+        max_len = 0
+        for line in lines:
+            if len(line) > max_len:
+                max_len = len(line)
+
+        padding = max(0, (width - max_len) // 2)
+        pad = " " * padding
+
+        for line in lines:
+            if line:
+                print(pad, end="")
+                for i, char in enumerate(line):
+                    print(char, end="", flush=True)
+                    if not skip_flag_ref[0]:
+                        self.sleep_or_skip_helper(delay, skip_flag_ref)
+                    if char in ('.', ',', '!') and (i == len(line) - 1 or line[i+1] == ' '):
+                        if not skip_flag_ref[0]:
+                            self.sleep_or_skip_helper(0.5, skip_flag_ref)
+                print()
+            else:
+                print()
 
     def dash_skipping(self, a, skip_flag_ref):
-        print("    ", end="")
-        for i in range(69):
+        try:
+            columns, _ = os.get_terminal_size()
+        except Exception:
+            columns = 80
+        width = max(79, columns - 1)
+
+        for i in range(width):
             print(a, end="", flush=True)
             if not skip_flag_ref[0]:
-                self.sleep_or_skip_helper(0.05, skip_flag_ref)
+                self.sleep_or_skip_helper(0.01 if a in ('-', '=') else 0.05, skip_flag_ref)
         print("")
 
     def game_intro(self):
-        self.flush_input()
-        
-        # --- SECTION 1: INTRO ---
-        skip_intro = [False]
-        if not skip_intro[0]:
-            self.sleep_or_skip_helper(1.0, skip_intro)
-            
-        print(f"\n{Colors.cyan(Colors.bold('                                TEXT-BASED ADVENTURE GAME'))}")
-        self.dash_skipping("=", skip_intro)
+        # Disable echo and canonical mode on Unix for the entire intro duration
+        old_settings = None
+        fd = None
+        if sys.platform != 'win32':
+            try:
+                import termios
+                fd = sys.stdin.fileno()
+                old_settings = termios.tcgetattr(fd)
+                new_settings = termios.tcgetattr(fd)
+                new_settings[3] = new_settings[3] & ~termios.ECHO & ~termios.ICANON
+                termios.tcsetattr(fd, termios.TCSADRAIN, new_settings)
+            except Exception:
+                pass
 
-        with open("intro.txt", "r") as file: #opens the intro file
-            for line in file:
-                words = line.split()
-                print("    ", end='')  #indentation for the text
-                for word in words:
-                    for char in word:
-                        print(char, end='', flush=True) #prints each character with a delay
-                        if not skip_intro[0]:
-                            self.sleep_or_skip_helper(0.05, skip_intro)
-                    print(' ', end='', flush=True)  #adds a space between words
-                    if not skip_intro[0]:
-                        self.sleep_or_skip_helper(0.05, skip_intro)
-                    if word.endswith('.') or word.endswith(','):
-                        if not skip_intro[0]:
-                            self.sleep_or_skip_helper(0.5, skip_intro)
-                print()
+        try:
+            self.flush_input()
+            
+            # --- SECTION 1: INTRO ---
+            skip_intro = [False]
+            if not skip_intro[0]:
+                self.sleep_or_skip_helper(1.0, skip_intro)
                 
-        # --- SECTION 2: OBJECTIVE ---
-        self.flush_input()
-        skip_objective = [False]
-        
-        if not skip_objective[0]:
-            self.sleep_or_skip_helper(0.5, skip_objective)
-        self.dash_skipping("-", skip_objective)
-        if not skip_objective[0]:
-            self.sleep_or_skip_helper(0.5, skip_objective)
+            self.print_centered(Colors.cyan(Colors.bold('TEXT-BASED ADVENTURE GAME')))
+            self.dash_skipping("=", skip_intro)
+
+            self.stream_file_centered("intro.txt", skip_intro)
+                    
+            # --- SECTION 2: OBJECTIVE ---
+            self.flush_input()
+            skip_objective = [False]
             
-        print(f"    {Colors.cyan('GAME OBJECTIVE:')}")
-        if not skip_objective[0]:
-            self.sleep_or_skip_helper(0.7, skip_objective)
+            if not skip_objective[0]:
+                self.sleep_or_skip_helper(0.5, skip_objective)
+            self.dash_skipping("-", skip_objective)
+            if not skip_objective[0]:
+                self.sleep_or_skip_helper(0.5, skip_objective)
+                
+            self.print_centered(Colors.cyan('GAME OBJECTIVE:'))
+            if not skip_objective[0]:
+                self.sleep_or_skip_helper(0.7, skip_objective)
 
-        with open("objective.txt", "r") as file: # opens the objective file
-            for line in file:
-                words = line.split()
-                print("    ", end='')  #indentation for the text
-                for word in words:
-                    for char in word:
-                        print(char, end='', flush=True) #prints each character with a delay
-                        if not skip_objective[0]:
-                            self.sleep_or_skip_helper(0.05, skip_objective)
-                    print(' ', end='', flush=True)  #adds a space between words  
-                    if not skip_objective[0]:
-                        self.sleep_or_skip_helper(0.05, skip_objective)
-                    if (word.endswith(',') or word.endswith('!')):
-                        if not skip_objective[0]:
-                            self.sleep_or_skip_helper(0.45, skip_objective)
-                print()
+            self.stream_file_centered("objective.txt", skip_objective)
 
-        # --- SECTION 3: COMMANDS ---
-        self.flush_input()
-        skip_commands = [False]
-        
-        if not skip_commands[0]:
-            self.sleep_or_skip_helper(0.5, skip_commands)
-        self.dash_skipping("-", skip_commands)
-        if not skip_commands[0]:
-            self.sleep_or_skip_helper(2.0, skip_commands)
-
-        print(f"    {Colors.cyan('COMMANDS:')}")
-        
-        commands_list = [
-            f"   '{Colors.yellow('move [direction]')}' - move around (north, south, east, west)",
-            f"   '{Colors.yellow('collect [item]')}' - collect the item in the room",
-            f"   '{Colors.yellow('use potion')}' - heal yourself using a potion",
-            f"   '{Colors.yellow('read note')}' - reads the note you've collected",
-            f"   '{Colors.yellow('inventory')}' - see what you've collected",
-            f"   '{Colors.yellow('map')}' - see the blueprint of the house",
-            f"   '{Colors.yellow('save')}' - save your game",
-            f"   '{Colors.yellow('quit')}' - leave the game"
-        ]
-        
-        for cmd in commands_list:
-            print(cmd)
+            # --- SECTION 3: COMMANDS ---
+            self.flush_input()
+            skip_commands = [False]
+            
             if not skip_commands[0]:
                 self.sleep_or_skip_helper(0.5, skip_commands)
-                
-        self.dash_skipping("-", skip_commands)
-        print("")
-        self.flush_input()
+            self.dash_skipping("-", skip_commands)
+            if not skip_commands[0]:
+                self.sleep_or_skip_helper(2.0, skip_commands)
+
+            self.print_centered(Colors.cyan('COMMANDS:'))
+            
+            commands_list = [
+                f"'{Colors.yellow('move [direction]')}' - move around (north, south, east, west)",
+                f"'{Colors.yellow('collect [item]')}' - collect the item in the room",
+                f"'{Colors.yellow('use potion')}' - heal yourself using a potion",
+                f"'{Colors.yellow('read note')}' - reads the note you've collected",
+                f"'{Colors.yellow('inventory')}' - see what you've collected",
+                f"'{Colors.yellow('map')}' - see the blueprint of the house",
+                f"'{Colors.yellow('save')}' - save your game",
+                f"'{Colors.yellow('quit')}' - leave the game"
+            ]
+            
+            try:
+                columns, _ = os.get_terminal_size()
+            except Exception:
+                columns = 80
+            width = max(79, columns - 1)
+
+            # Calculate max length of command lines (stripping ANSI codes)
+            import re
+            ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+
+            max_len = 0
+            for cmd in commands_list:
+                clean = ansi_escape.sub('', cmd)
+                if len(clean) > max_len:
+                    max_len = len(clean)
+
+            cmd_padding = max(0, (width - max_len) // 2)
+            pad = " " * cmd_padding
+
+            for cmd in commands_list:
+                print(pad + cmd)
+                if not skip_commands[0]:
+                    self.sleep_or_skip_helper(0.5, skip_commands)
+                    
+            self.dash_skipping("-", skip_commands)
+            print("")
+            self.flush_input()
+
+        finally:
+            if old_settings is not None and fd is not None:
+                try:
+                    import termios
+                    termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+                except Exception:
+                    pass
 
     def check_locked_room(self, room, attempts=0):
         if 'locked' in self.rooms[room] and self.rooms[room]['locked']:

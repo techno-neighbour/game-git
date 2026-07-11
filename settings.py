@@ -222,12 +222,12 @@ class g_func:
         except Exception:
             columns = 80
         width = max(79, columns - 1)
-        
+
         # Clean ANSI escape sequences to calculate exact padding
         import re
         ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
         clean = ansi_escape.sub('', text)
-            
+
         padding = max(0, (width - len(clean)) // 2)
         print(" " * padding, end="")
         if delay > 0.0:
@@ -254,16 +254,16 @@ class g_func:
                     lines.append(" ".join(stripped.split()))
                 else:
                     lines.append("")
-                    
+
         # Find maximum length among non-empty lines
         max_len = 0
         for line in lines:
             if len(line) > max_len:
                 max_len = len(line)
-                
+
         padding = max(0, (width - max_len) // 2)
         pad = " " * padding
-        
+
         for line in lines:
             if line:
                 print(pad, end="")
@@ -284,7 +284,7 @@ class g_func:
         except Exception:
             columns = 80
         width = max(79, columns - 1)
-        
+
         for i in range(width):
             print(a, end="", flush=True)
             if not skip_flag_ref[0]:
@@ -352,16 +352,16 @@ class g_func:
         # Calculate max length of command lines (stripping ANSI codes)
         import re
         ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
-        
+
         max_len = 0
         for cmd in commands_list:
             clean = ansi_escape.sub('', cmd)
             if len(clean) > max_len:
                 max_len = len(clean)
-                
+
         cmd_padding = max(0, (width - max_len) // 2)
         pad = " " * cmd_padding
-        
+
         for cmd in commands_list:
             print(pad + cmd)
             if not skip_commands[0]:
@@ -412,15 +412,15 @@ class g_func:
     def draw_room(self, player_r, player_c):
         grid = []
         room_data = self.rooms[self.current_room]
-        
+
         has_north = 'north' in room_data
         has_south = 'south' in room_data
         has_west = 'west' in room_data
         has_east = 'east' in room_data
-        
+
         center = self.ROOM_SIZE // 2
         max_idx = self.ROOM_SIZE - 1
-        
+
         for r in range(self.ROOM_SIZE):
             row_chars = []
             for c in range(self.ROOM_SIZE):
@@ -447,7 +447,7 @@ class g_func:
                 else:
                     row_chars.append('.')
             grid.append(row_chars)
-            
+
         if 'item' in room_data:
             if 'item_pos' not in room_data:
                 room_data['item_pos'] = (rd.randint(1, self.ROOM_SIZE - 2), rd.randint(1, self.ROOM_SIZE - 2))
@@ -458,15 +458,15 @@ class g_func:
                 grid[ir][ic] = '☤'
             elif room_data['item'] == 'note':
                 grid[ir][ic] = '🗎'
-                
+
         if room_data.get('ghost') and not room_data.get('attacked'):
             if 'ghost_pos' not in room_data:
                 room_data['ghost_pos'] = (rd.randint(1, self.ROOM_SIZE - 2), rd.randint(1, self.ROOM_SIZE - 2))
             gr, gc = room_data['ghost_pos']
             grid[gr][gc] = '☠'
-            
+
         grid[player_r][player_c] = self.player_dir
-        
+
         # Render each cell as 2 characters wide for emoji alignment
         colored_grid = []
         for r in range(self.ROOM_SIZE):
@@ -493,7 +493,7 @@ class g_func:
                     # Fallback for any other characters
                     line_parts.append(char + " ")
             colored_grid.append("".join(line_parts))
-            
+
         return "\n".join(colored_grid)
     
     def blueprint(self): 

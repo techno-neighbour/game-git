@@ -10,25 +10,56 @@ except ImportError:
 from settings import g_func, Colors, timed_input
 
 def clear_screen():
-    os.system('cls' if os.name == 'nt' else 'clear')
+    print("\033[H\033[J", end="", flush=True)
 
-def timed_key_input(timeout_check_func):
+def timed_key_input(timeout_check_func, ghost_timer_func=None):
     if sys.platform != 'win32' or msvcrt is None:
-        return sys.stdin.read(1).lower()
-    while True:
-        if timeout_check_func():
-            return None
-        if msvcrt.kbhit():
-            ch = msvcrt.getwch().lower()
-            if ch in ('\x00', '\xe0'):
-                if msvcrt.kbhit():
-                    msvcrt.getwch()
-                continue
-            return ch
-        time.sleep(0.05)
+        import select
+        try:
+            import termios
+            import tty
+        except ImportError:
+            pass
+
+        fd = sys.stdin.fileno()
+        try:
+            old_settings = termios.tcgetattr(fd)
+        except Exception:
+            # Not a terminal (e.g. running in tests or CI)
+            # Fallback to simple read without ghost independent movement
+            return sys.stdin.read(1).lower()
+
+        try:
+            tty.setraw(fd)
+            while True:
+                if timeout_check_func():
+                    return None
+                if ghost_timer_func and ghost_timer_func():
+                    return 'GHOST_TICK'
+                rlist, _, _ = select.select([sys.stdin], [], [], 0.05)
+                if rlist:
+                    return sys.stdin.read(1).lower()
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+    else:
+        while True:
+            if timeout_check_func():
+                return None
+            if ghost_timer_func and ghost_timer_func():
+                return 'GHOST_TICK'
+            if msvcrt.kbhit():
+                ch = msvcrt.getwch().lower()
+                if ch in ('\x00', '\xe0'):
+                    if msvcrt.kbhit():
+                        msvcrt.getwch()
+                    continue
+                return ch
+            time.sleep(0.05)
 
 # variables for the game
 def game_start():
+    if sys.platform == 'win32':
+        os.system('')
     SAVE_FILE = 'game_save.json' # file to save the game state
     time_up = False
     time_limit = 300
@@ -81,11 +112,11 @@ def game_start():
             'Hall': {'south': 'Hallway', 'east': 'Foyer', 'west': 'Library', 'north': 'Shrine'},
             'Hallway': {'north': 'Hall', 'east': 'Kitchen', 'south': 'Guestroom', 'west': 'Bedroom'}
         })
-        
+
         # Reset player position
         ss.player_r = ss.ROOM_SIZE // 2
         ss.player_c = ss.ROOM_SIZE // 2
-        
+
         return n, nk
 
     # to check if a game file exists and user wants to load it
@@ -140,9 +171,17 @@ def game_start():
     threading.Thread(target=countdown_timer, daemon=True).start() # start countdown timer in a separate thread
 
     start_time = time.time()
+    last_ghost_tick = time.time()
     action_message = ""
     game_over_reason = "timer"
     show_map = False
+
+    def check_ghost_timer():
+        nonlocal last_ghost_tick
+        if time.time() - last_ghost_tick > 0.25:
+            last_ghost_tick = time.time()
+            return True
+        return False
 
     def update_ghost_movement():
         room_data = ss.rooms[ss.current_room]
@@ -165,14 +204,14 @@ def game_start():
                 valid = [(r, c) for r, c in moves if 1 <= r <= ss.ROOM_SIZE - 2 and 1 <= c <= ss.ROOM_SIZE - 2]
                 if valid:
                     room_data['ghost_pos'] = rd.choice(valid)
-            
+
             # Check if ghost walked onto player
             if room_data['ghost_pos'] == (ss.player_r, ss.player_c):
                 render_game_screen("A ghost is attacking!")
                 if ss.ghost(render_game_screen):
                     return True
                 ss.health = ss.give_health()
-                
+
                 # Respawn the ghost away from the player
                 p_r, p_c = ss.player_r, ss.player_c
                 while True:
@@ -185,48 +224,48 @@ def game_start():
         return False
 
     def render_game_screen(action_message=""):
-        clear_screen()
-        
+        print("\033[H", end="", flush=True)
+
         # Get terminal size dynamically
         try:
             columns, _ = os.get_terminal_size()
         except Exception:
             columns = 80
         width = max(79, columns - 1)
-        
+
         # Add action message to log if provided
         if action_message:
             ss.add_message(action_message)
-            
+
         # Draw the 15x15 room grid lines (43 chars wide)
         grid_str = ss.draw_room(ss.player_r, ss.player_c)
         grid_lines = grid_str.split('\n')
-        
+
         # Left margin spacing (slightly left-shifted)
         left_margin = " " * 4
-        
+
         # Dynamic right panel width
         max_w = max(25, width - 50)
-        
+
         # Health bar
         num_blocks = int(ss.health / 10)
         health_bar = "■" * num_blocks + "░" * (10 - num_blocks)
         health_color = Colors.green if ss.health > 20 else Colors.red
-        
+
         # Timer
         elapsed = time.time() - start_time
         remaining = max(0, int(time_limit - elapsed))
         mins, secs = divmod(remaining, 60)
         time_str = f"{mins:02d}:{secs:02d}"
-        
+
         # Items
         potions_str = Colors.green(str(ss.inventory.get('potion', 0)))
         keys_str = Colors.green(str(ss.inventory.get('key', 0)))
-        
+
         # Note and log wrapping helper
         import re
         ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
-        
+
         def wrap_text(text, max_w):
             words = text.split(' ')
             lines = []
@@ -250,71 +289,72 @@ def game_start():
         note_lines = []
         if ss.inventory.get('note', 0) > 0:
             note_lines = wrap_text(f"Note: '{nk}'", max_w)
-            
+
         # Build sidebar lines
         sidebar = []
-        
+
         def center_in_w(text, w):
             import re
             ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
             clean = ansi_escape.sub('', text)
             padding = max(0, (w - len(clean)) // 2)
             return " " * padding + text
-            
+
         # Row 0: Title
         sidebar.append(center_in_w(Colors.bold(Colors.cyan("=== STATUS PANEL ===")), max_w))
-        
+
         # Row 1: Location
         sidebar.append(f"Location: {Colors.cyan(ss.current_room)}")
-        
+
         # Row 2: HP
         sidebar.append(f"HP:       {health_color(health_bar)} {ss.health} HP")
-        
+
         # Row 3: Time
         sidebar.append(f"Time:     {Colors.yellow(time_str)}")
-        
+
         # Row 4: Keys
         sidebar.append(f"Keys:     {keys_str}/3")
-        
+
         # Row 5: Potions
         sidebar.append(f"Potions:  {potions_str}")
-        
+
         # Row 6: Note line 1 (Note content or empty)
         if len(note_lines) > 0:
             sidebar.append(note_lines[0])
         else:
             sidebar.append("")
-            
+
         # Row 7: Divider
         sidebar.append(Colors.cyan("─" * max_w))
-        
+
         # Rows 8 to bottom: Log messages (wrapped dynamically to prevent layout breaks)
         all_wrapped_logs = []
         for log in ss.log_messages:
             all_wrapped_logs.extend(wrap_text(log, max_w))
-            
+
         log_lines_count = len(grid_lines) - 8
         logs = all_wrapped_logs[-log_lines_count:]
         while len(logs) < log_lines_count:
             logs.insert(0, "")
-            
+
         for log in logs:
             sidebar.append(log)
-            
+
         # Print grid and sidebar side-by-side
         for r in range(len(grid_lines)):
             g_line = grid_lines[r]
             s_line = sidebar[r] if r < len(sidebar) else ""
-            print(left_margin + g_line + " │ " + s_line)
-            
-        print("=" * width)
-        
+            print(left_margin + g_line + " │ " + s_line + "\033[K")
+
+        print("=" * width + "\033[K")
+
         controls_str = f"Controls: {Colors.yellow('WASD')} - Move | {Colors.yellow('M')} - Map | {Colors.yellow('U')} - Potion | {Colors.yellow('R')} - Read Note | {Colors.yellow('V')} - Save | {Colors.yellow('Q')} - Quit"
         import re
         ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
         clean_controls = ansi_escape.sub('', controls_str)
         controls_padding = max(0, (width - len(clean_controls)) // 2)
-        print(" " * controls_padding + controls_str)
+        print(" " * controls_padding + controls_str + "\033[K")
+        print("\033[J", end="", flush=True)
 
     # main game loop
     while not time_up:
@@ -326,12 +366,12 @@ def game_start():
             except Exception:
                 columns = 80
             width = max(79, columns - 1)
-            
+
             # Print centered header
             print("\n" + "=" * width)
             ss.print_centered(Colors.bold(Colors.cyan("MAP OF THE HOUSE")))
             print("=" * width + "\n")
-            
+
             # Print blueprint layout centered
             layout = """                +-------------+     +--------+     +---------+
                 | Observatory |-----| Shrine |-----| Sunroom |
@@ -358,7 +398,7 @@ def game_start():
                 stripped_line = line[16:] if len(line) >= 16 else line
                 padding = max(0, (width - 76) // 2)
                 print(" " * padding + Colors.cyan(stripped_line))
-                
+
             print("\n" + "=" * width)
             footer_str = f"Press {Colors.yellow('M')} again to close the Map."
             import re
@@ -367,7 +407,7 @@ def game_start():
             footer_padding = max(0, (width - len(clean_footer)) // 2)
             print(" " * footer_padding + footer_str)
             print("=" * width)
-            
+
             key = timed_key_input(lambda: time_up)
             if key is None or time_up:
                 game_over_reason = "patron"
@@ -379,13 +419,19 @@ def game_start():
         render_game_screen(action_message)
         action_message = "" # clear message for next turn
 
-        key = timed_key_input(lambda: time_up)
+        key = timed_key_input(lambda: time_up, check_ghost_timer)
         if key is None or time_up:
             game_over_reason = "patron"
             break
-            
+
         room_data = ss.rooms[ss.current_room]
-        
+
+        if key == 'GHOST_TICK':
+            if update_ghost_movement():
+                game_over_reason = "ghost"
+                break
+            continue
+
         if key == 'q':
             clear_screen()
             print(Colors.red("You chose to die! "), end='', flush=True)
@@ -393,17 +439,17 @@ def game_start():
             print(Colors.red("May your soul be at peace."))
             game_over_reason = "quit"
             break
-            
+
         elif key == 'v':
             ss.save(n, nk, SAVE_FILE)
             render_game_screen()
             time.sleep(1.5)
-            
+
         elif key == 'u':
             ss.use_potion()
             render_game_screen()
             time.sleep(1.5)
-            
+
         elif key == 'r':
             if ss.inventory.get('note', 0) > 0:
                 ss.add_message(f"Note reads: '{Colors.yellow(nk)}'")
@@ -411,23 +457,23 @@ def game_start():
                 ss.add_message("You don't have a note.")
             render_game_screen()
             time.sleep(1.5)
-            
+
         elif key == 'm':
             show_map = True
-            
+
         elif key in ('w', 'a', 's', 'd'):
             if key == 'w': ss.player_dir = '▲'
             elif key == 's': ss.player_dir = '▼'
             elif key == 'a': ss.player_dir = '◄'
             elif key == 'd': ss.player_dir = '►'
-            
+
             # Calculate target coordinates
             tr, tc = ss.player_r, ss.player_c
             if key == 'w': tr -= 1
             elif key == 's': tr += 1
             elif key == 'a': tc -= 1
             elif key == 'd': tc += 1
-            
+
             # Check walkability / doorways
             is_doorway = False
             next_room = None
@@ -435,7 +481,7 @@ def game_start():
             max_idx = ss.ROOM_SIZE - 1
             inner_max = ss.ROOM_SIZE - 2
             entry_r, entry_c = center, center
-            
+
             if tr == 0 and tc == center:
                 is_doorway = True
                 if 'north' in room_data:
@@ -456,7 +502,7 @@ def game_start():
                 if 'east' in room_data:
                     next_room = room_data['east']
                     entry_r, entry_c = center, 1
-                    
+
             if is_doorway:
                 if next_room is not None:
                     # Check locked room/door connection
@@ -482,7 +528,7 @@ def game_start():
                         # Move to adjacent room
                         if 'ghost' in room_data:
                             room_data['attacked'] = False
-                            
+
                         ss.current_room = next_room
                         ss.player_r = entry_r
                         ss.player_c = entry_c
@@ -493,7 +539,7 @@ def game_start():
                 # Walk inside current room
                 ss.player_r = tr
                 ss.player_c = tc
-                
+
                 # Check item pick up
                 if 'item' in room_data and room_data.get('item_pos') == (tr, tc):
                     item = room_data['item']
@@ -505,7 +551,7 @@ def game_start():
                     del room_data['item']
                     if 'item_pos' in room_data:
                         del room_data['item_pos']
-                    
+
                 # Check ghost attack
                 elif room_data.get('ghost') and not room_data.get('attacked') and room_data.get('ghost_pos') == (tr, tc):
                     render_game_screen("A ghost is attacking!")
@@ -513,7 +559,7 @@ def game_start():
                         game_over_reason = "ghost"
                         break
                     ss.health = ss.give_health()
-                    
+
                     # Respawn the ghost away from the player
                     p_r, p_c = ss.player_r, ss.player_c
                     while True:
@@ -525,10 +571,6 @@ def game_start():
                     time.sleep(1.5)
             else:
                 action_message = Colors.yellow("Ouch! You hit a wall.")
-
-            if update_ghost_movement():
-                game_over_reason = "ghost"
-                break
 
     if game_over_reason == "victory":
         print(Colors.green("\nYou have made it to the exit and start to run. "), end='', flush=True)
